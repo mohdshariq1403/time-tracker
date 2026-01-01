@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌙 Study Tracker - Real Time</title>
+    <title>🌙 Study Tracker - Real Time with Firebase</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
         /* === RESET & BASE === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -731,10 +730,7 @@
         .chart-bar-fill::after {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
             animation: shimmer 3s infinite;
         }
@@ -1166,16 +1162,17 @@
     <div id="loading">
         <div class="spinner"></div>
         <h2>Starting Real-Time Study Tracker...</h2>
+        <p id="firebaseStatus" class="text-muted">Connecting to Firebase...</p>
     </div>
 
     <!-- Real Time Status Indicator -->
     <div class="realtime-status" id="realtimeStatus">
         <i class="fas fa-plug"></i>
-        <span>Connected to server</span>
+        <span>Connected to Firebase</span>
     </div>
 
     <!-- Monitor Live View Indicator (for student) -->
-    <div class="monitor-live-view" id="monitorLiveView">
+    <div class="monitor-live-view hidden" id="monitorLiveView">
         <div class="live-status">
             <div class="live-status-dot"></div>
             <span>Monitor is watching live</span>
@@ -1214,7 +1211,7 @@
                 <span id="monitorTimerText">00:00:00</span>
             </div>
             <span id="lastUpdateTime" class="small text-muted" style="margin-left: 15px; font-size: 0.8rem;">
-                <i class="fas fa-sync-alt"></i> Live Updates
+                <i class="fas fa-sync-alt"></i> <span id="updateStatus">Live Updates</span>
             </span>
         </div>
         <button class="notification-btn" id="monitorNotificationBtn">
@@ -1378,7 +1375,7 @@
             <div class="header-content">
                 <div>
                     <h1><i class="fas fa-moon"></i> Real-Time Study Tracker</h1>
-                    <p class="text-muted">Live updates for your monitor</p>
+                    <p class="text-muted">Live updates for your monitor via Firebase</p>
                 </div>
                 <button class="notification-btn" id="notificationBtn">
                     <i class="fas fa-bell"></i>
@@ -1415,8 +1412,8 @@
                         <textarea id="sessionNotes" placeholder="What are you studying?"></textarea>
                     </div>
                     <div class="realtime-info" style="padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px; margin-top: 15px;">
-                        <i class="fas fa-sync-alt"></i>
-                        <span class="small">Live updates sent to monitor in real-time</span>
+                        <i class="fas fa-fire"></i>
+                        <span class="small">Live updates via Firebase to monitor in real-time</span>
                     </div>
                 </div>
 
@@ -1478,7 +1475,7 @@
                         <i class="fas fa-user-plus"></i> Invite Monitor
                     </button>
                     <div class="mt-15 text-muted small" style="padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px;">
-                        <i class="fas fa-broadcast-tower"></i> <strong>Live Updates:</strong> Monitor sees changes in real-time
+                        <i class="fas fa-fire"></i> <strong>Firebase Live Updates:</strong> Monitor sees changes instantly
                     </div>
                     <div class="mt-10 text-muted small" style="padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 10px;">
                         <i class="fas fa-clock"></i> <strong>Live Timer:</strong> Monitor sees timer counting in real-time
@@ -1567,50 +1564,58 @@
             appId: "1:1082920157508:web:c38d54edf9d934b4939711"
         };
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
         // ========== FIREBASE REAL-TIME SERVICE ==========
-        class FirebaseRealTimeService {
+        class FirebaseService {
             constructor() {
+                this.db = null;
                 this.isConnected = false;
                 this.roomId = null;
-                this.userId = this.generateUserId();
+                this.userId = null;
                 this.isMonitor = false;
-                this.roomRef = null;
-                this.connectionRef = null;
-            }
-            
-            generateUserId() {
-                return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            }
-            
-            connect() {
-                this.isConnected = true;
-                this.updateConnectionStatus(true);
+                this.studentName = "Shariq";
                 
-                // Monitor Firebase connection state
-                const connectedRef = database.ref('.info/connected');
-                connectedRef.on('value', (snap) => {
-                    if (snap.val() === true) {
-                        this.isConnected = true;
-                        this.updateConnectionStatus(true);
-                    } else {
-                        this.isConnected = false;
-                        this.updateConnectionStatus(false);
-                    }
-                });
-                
-                return this.isConnected;
+                this.initFirebase();
             }
             
-            updateConnectionStatus(connected) {
+            initFirebase() {
+                try {
+                    // Initialize Firebase
+                    firebase.initializeApp(firebaseConfig);
+                    this.db = firebase.database();
+                    
+                    // Check connection status
+                    const connectedRef = this.db.ref(".info/connected");
+                    connectedRef.on("value", (snap) => {
+                        this.isConnected = snap.val() === true;
+                        this.updateConnectionStatus();
+                        
+                        if (this.isConnected) {
+                            console.log("Firebase connected");
+                            
+                            // If we have a room, setup listeners
+                            if (this.roomId) {
+                                this.setupRoomListeners();
+                            }
+                        } else {
+                            console.log("Firebase disconnected");
+                        }
+                    });
+                    
+                    // Generate user ID
+                    this.userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    
+                } catch (error) {
+                    console.error("Firebase initialization error:", error);
+                    document.getElementById('firebaseStatus').textContent = "Firebase connection failed";
+                }
+            }
+            
+            updateConnectionStatus() {
                 const statusElement = document.getElementById('realtimeStatus');
                 if (statusElement) {
                     statusElement.style.display = 'flex';
                     
-                    if (connected) {
+                    if (this.isConnected) {
                         statusElement.className = 'realtime-status';
                         statusElement.innerHTML = `
                             <i class="fas fa-fire"></i>
@@ -1626,156 +1631,217 @@
                         statusElement.className = 'realtime-status disconnected';
                         statusElement.innerHTML = `
                             <i class="fas fa-unlink"></i>
-                            <span>Disconnected from Firebase</span>
+                            <span>Firebase disconnected</span>
                         `;
                     }
                 }
             }
             
             createRoom(monitorName) {
-                this.roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+                if (!this.isConnected) {
+                    this.showToast("Waiting for Firebase connection...", "warning");
+                    return null;
+                }
+                
+                this.roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
                 localStorage.setItem('study_room_id', this.roomId);
                 localStorage.setItem('monitor_name', monitorName);
                 
-                // Create room in Firebase
-                const roomRef = database.ref('rooms/' + this.roomId);
-                roomRef.set({
+                // Initialize room data
+                this.db.ref(`rooms/${this.roomId}`).set({
                     created: Date.now(),
+                    studentName: this.studentName,
                     monitorName: monitorName,
-                    studentId: this.userId,
+                    lastUpdated: Date.now(),
                     active: true
                 });
                 
-                // Set up room listener
-                this.setupRoomListener();
+                // Setup student presence
+                this.updateStudentPresence(true);
+                
+                // Setup room listeners
+                this.setupRoomListeners();
                 
                 return this.roomId;
             }
             
             joinRoom(roomId) {
+                if (!this.isConnected) {
+                    this.showToast("Waiting for Firebase connection...", "warning");
+                    return false;
+                }
+                
                 this.roomId = roomId;
                 this.isMonitor = true;
                 
-                const roomRef = database.ref('rooms/' + roomId);
-                roomRef.update({
-                    monitorId: this.userId,
-                    monitorJoined: Date.now()
-                });
-                
-                this.setupRoomListener();
-            }
-            
-            setupRoomListener() {
-                if (!this.roomId) return;
-                
-                this.roomRef = database.ref('rooms/' + this.roomId);
-                this.roomRef.on('value', (snapshot) => {
-                    const roomData = snapshot.val();
-                    if (roomData) {
-                        this.handleRoomUpdate(roomData);
+                // Check if room exists
+                this.db.ref(`rooms/${roomId}`).once('value').then((snapshot) => {
+                    if (snapshot.exists()) {
+                        // Room exists, join as monitor
+                        this.db.ref(`rooms/${roomId}/monitors/${this.userId}`).set({
+                            joined: Date.now(),
+                            active: true
+                        });
+                        
+                        this.setupRoomListeners();
+                        return true;
+                    } else {
+                        this.showToast("Room not found", "error");
+                        return false;
                     }
                 });
                 
-                // Set up data listener
-                this.dataRef = database.ref('study_data/' + this.roomId);
-                this.dataRef.on('child_added', (snapshot) => {
-                    const data = snapshot.val();
-                    this.handleStudyData(data);
+                return true;
+            }
+            
+            setupRoomListeners() {
+                if (!this.roomId || !this.isConnected) return;
+                
+                // Listen for study sessions
+                this.db.ref(`rooms/${this.roomId}/sessions`).on('child_added', (snapshot) => {
+                    const session = snapshot.val();
+                    if (this.isMonitor) {
+                        this.handleNewSession(session);
+                    }
                 });
                 
-                // Set up timer listener
-                this.timerRef = database.ref('timers/' + this.roomId);
-                this.timerRef.on('value', (snapshot) => {
+                // Listen for timer updates
+                this.db.ref(`rooms/${this.roomId}/timer`).on('value', (snapshot) => {
                     const timerData = snapshot.val();
-                    this.handleTimerData(timerData);
-                });
-            }
-            
-            handleRoomUpdate(roomData) {
-                // For student: show that monitor has joined
-                if (!this.isMonitor && roomData.monitorId) {
-                    this.showMonitorJoinedNotification(roomData);
-                }
-            }
-            
-            handleStudyData(data) {
-                if (this.isMonitor) {
-                    // Monitor receives study updates from student
-                    if (window.studyTracker && data) {
-                        window.studyTracker.updateFromRemote(data);
+                    if (this.isMonitor && timerData) {
+                        this.handleTimerUpdate(timerData);
                     }
-                    
-                    // Show notification
-                    this.showStudyNotification(data);
-                }
-            }
-            
-            handleTimerData(timerData) {
-                if (this.isMonitor) {
-                    this.updateMonitorTimer(timerData);
-                }
-            }
-            
-            sendStudyUpdate(session) {
-                if (!this.roomId) return;
+                });
                 
-                const updateRef = database.ref('study_data/' + this.roomId).push();
-                updateRef.set({
+                // Listen for student presence
+                this.db.ref(`rooms/${this.roomId}/student`).on('value', (snapshot) => {
+                    const studentData = snapshot.val();
+                    if (studentData && this.isMonitor) {
+                        this.handleStudentPresence(studentData);
+                    }
+                });
+                
+                // Listen for student updates (stats, etc.)
+                this.db.ref(`rooms/${this.roomId}/updates`).on('child_added', (snapshot) => {
+                    const update = snapshot.val();
+                    if (this.isMonitor) {
+                        this.handleStudentUpdate(update);
+                    }
+                });
+                
+                // Update last activity
+                this.updateLastActivity();
+            }
+            
+            sendStudySession(session) {
+                if (!this.isConnected || !this.roomId) return;
+                
+                const sessionId = 'session_' + Date.now();
+                this.db.ref(`rooms/${this.roomId}/sessions/${sessionId}`).set({
                     ...session,
                     timestamp: Date.now(),
-                    userId: this.userId,
-                    type: 'study_session'
+                    id: sessionId
+                });
+                
+                // Also update overall stats
+                this.updateStudentStats(session);
+                
+                // Send notification
+                this.sendNotification({
+                    type: 'session',
+                    title: '📚 Study Session Completed',
+                    message: `${this.studentName} studied ${session.duration} minutes of ${session.subject}`,
+                    session: session
                 });
             }
             
             sendTimerUpdate(timerData) {
-                if (!this.roomId) return;
+                if (!this.isConnected || !this.roomId) return;
                 
-                database.ref('timers/' + this.roomId).set({
+                this.db.ref(`rooms/${this.roomId}/timer`).set({
                     ...timerData,
-                    timestamp: Date.now(),
+                    timestamp: Date.now()
+                });
+            }
+            
+            updateStudentStats(session) {
+                if (!this.isConnected || !this.roomId) return;
+                
+                // Get current stats
+                this.db.ref(`rooms/${this.roomId}/stats`).once('value').then((snapshot) => {
+                    const currentStats = snapshot.val() || { totalMinutes: 0, sessionCount: 0 };
+                    
+                    const newStats = {
+                        totalMinutes: (currentStats.totalMinutes || 0) + (session.duration || 0),
+                        sessionCount: (currentStats.sessionCount || 0) + 1,
+                        lastSession: Date.now(),
+                        lastSubject: session.subject
+                    };
+                    
+                    this.db.ref(`rooms/${this.roomId}/stats`).set(newStats);
+                    
+                    // Send update
+                    this.db.ref(`rooms/${this.roomId}/updates/stats_${Date.now()}`).set({
+                        type: 'stats_update',
+                        stats: newStats,
+                        timestamp: Date.now()
+                    });
+                });
+            }
+            
+            updateStudentPresence(isActive) {
+                if (!this.isConnected || !this.roomId) return;
+                
+                this.db.ref(`rooms/${this.roomId}/student`).set({
+                    active: isActive,
+                    lastSeen: Date.now(),
                     userId: this.userId
                 });
             }
             
-            showStudyNotification(studyData) {
-                if (this.isMonitor && studyData) {
-                    const notification = {
-                        id: 'firebase_study_' + Date.now(),
-                        type: 'study',
-                        title: '📚 Live Study Session',
-                        message: `${studyData.subject || 'Unknown'} for ${studyData.duration || 0} minutes`,
-                        time: new Date().toISOString(),
-                        read: false,
-                        important: true
-                    };
-                    
-                    if (window.studyTracker && window.studyTracker.monitor) {
-                        window.studyTracker.monitor.saveMonitorNotification(notification);
-                        window.studyTracker.monitor.loadNotifications();
-                        window.studyTracker.monitor.updateBadge();
-                    }
-                }
+            updateLastActivity() {
+                if (!this.isConnected || !this.roomId) return;
+                
+                this.db.ref(`rooms/${this.roomId}/lastActivity`).set(Date.now());
             }
             
-            showMonitorJoinedNotification(roomData) {
-                // Show live view indicator
-                const liveView = document.getElementById('monitorLiveView');
-                if (liveView) {
-                    liveView.classList.remove('hidden');
-                    
-                    setTimeout(() => {
-                        liveView.classList.add('hidden');
-                    }, 10000);
+            sendNotification(notification) {
+                if (!this.isConnected || !this.roomId) return;
+                
+                const notificationId = 'notif_' + Date.now();
+                this.db.ref(`rooms/${this.roomId}/notifications/${notificationId}`).set({
+                    ...notification,
+                    timestamp: Date.now(),
+                    read: false
+                });
+            }
+            
+            markNotificationRead(notificationId) {
+                if (!this.isConnected || !this.roomId) return;
+                
+                this.db.ref(`rooms/${this.roomId}/notifications/${notificationId}/read`).set(true);
+            }
+            
+            // ========== HANDLERS FOR MONITOR ==========
+            handleNewSession(session) {
+                if (!this.isMonitor) return;
+                
+                console.log("New session from student:", session);
+                
+                // Update monitor UI
+                if (window.studyTracker) {
+                    window.studyTracker.updateFromRemote({
+                        type: 'session',
+                        session: session
+                    });
                 }
                 
-                if (window.studyTracker) {
-                    window.studyTracker.showToast('Monitor is now watching live via Firebase!', 'success');
-                }
+                // Show notification
+                this.showMonitorNotification(session);
             }
             
-            updateMonitorTimer(timerData) {
-                if (!this.isMonitor || !timerData) return;
+            handleTimerUpdate(timerData) {
+                if (!this.isMonitor) return;
                 
                 const timerBadge = document.getElementById('monitorTimerBadge');
                 const timerText = document.getElementById('monitorTimerText');
@@ -1784,10 +1850,12 @@
                     if (timerBadge) {
                         timerBadge.style.display = 'flex';
                         
-                        if (timerText && timerData.elapsed !== undefined) {
-                            const hours = Math.floor(timerData.elapsed / 3600);
-                            const minutes = Math.floor((timerData.elapsed % 3600) / 60);
-                            const seconds = timerData.elapsed % 60;
+                        // Update timer display
+                        if (timerText) {
+                            const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
+                            const hours = Math.floor(elapsed / 3600);
+                            const minutes = Math.floor((elapsed % 3600) / 60);
+                            const seconds = elapsed % 60;
                             
                             timerText.textContent = 
                                 `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -1800,15 +1868,101 @@
                 }
             }
             
+            handleStudentPresence(studentData) {
+                if (!this.isMonitor) return;
+                
+                const updateElement = document.getElementById('updateStatus');
+                if (updateElement) {
+                    if (studentData.active) {
+                        updateElement.textContent = "Student is online";
+                        updateElement.style.color = "var(--accent-green)";
+                    } else {
+                        const lastSeen = new Date(studentData.lastSeen);
+                        const diff = Math.floor((Date.now() - studentData.lastSeen) / 1000 / 60); // minutes
+                        
+                        if (diff < 5) {
+                            updateElement.textContent = "Student was online a few minutes ago";
+                        } else {
+                            updateElement.textContent = `Last seen: ${lastSeen.toLocaleTimeString()}`;
+                        }
+                        updateElement.style.color = "var(--text-secondary)";
+                    }
+                }
+            }
+            
+            handleStudentUpdate(update) {
+                if (!this.isMonitor) return;
+                
+                console.log("Student update:", update);
+                
+                if (update.type === 'stats_update') {
+                    // Update stats display
+                    this.updateMonitorStats(update.stats);
+                }
+            }
+            
+            showMonitorNotification(session) {
+                const notification = {
+                    id: 'live_study_' + Date.now(),
+                    type: 'study',
+                    title: '📚 Live Study Session',
+                    message: `${session.subject} for ${session.duration} minutes`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+                
+                if (window.studyTracker && window.studyTracker.monitor) {
+                    window.studyTracker.monitor.saveMonitorNotification(notification);
+                    window.studyTracker.monitor.loadNotifications();
+                    window.studyTracker.monitor.updateBadge();
+                    
+                    // Show toast
+                    window.studyTracker.showToast(`📚 ${session.subject} studied for ${session.duration} minutes`, 'success');
+                }
+            }
+            
+            updateMonitorStats(stats) {
+                // Update monitor's stats display
+                const statsElement = document.getElementById('monitorStats');
+                if (statsElement) {
+                    statsElement.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
+                            <div style="background: var(--bg-highlight); padding: 15px; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--accent-green);">${stats.totalMinutes}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Minutes</div>
+                            </div>
+                            <div style="background: var(--bg-highlight); padding: 15px; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--accent-blue);">${stats.sessionCount}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Sessions</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            showToast(message, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                    ${message}
+                `;
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            }
+            
             disconnect() {
-                if (this.roomRef) {
-                    this.roomRef.off();
-                }
-                if (this.dataRef) {
-                    this.dataRef.off();
-                }
-                if (this.timerRef) {
-                    this.timerRef.off();
+                if (this.roomId) {
+                    if (this.isMonitor) {
+                        this.db.ref(`rooms/${this.roomId}/monitors/${this.userId}`).remove();
+                    } else {
+                        this.updateStudentPresence(false);
+                    }
                 }
             }
         }
@@ -1822,6 +1976,9 @@
                 this.NOTIFICATION_KEY = isMonitorView ? 'monitor_notifications' : 'student_notifications';
                 this.MONITOR_NOTIFICATION_KEY = 'monitor_shared_notifications';
                 this.birthdayChecked = false;
+                this.lastMonthlyReportSent = localStorage.getItem('lastMonthlyReportSent');
+                this.lastWeeklyReportSent = localStorage.getItem('lastWeeklyReportSent');
+                this.lastDailyNotificationSent = localStorage.getItem('lastDailyNotificationSent');
             }
 
             init() {
@@ -1829,6 +1986,7 @@
                 this.setupNotifications();
                 this.loadNotifications();
                 
+                // For student: check if monitor is already watching
                 if (!this.isMonitorView) {
                     this.checkMonitorPresence();
                 }
@@ -1837,16 +1995,28 @@
             checkMonitorPresence() {
                 const roomId = localStorage.getItem('study_room_id');
                 if (roomId && this.firebaseService.isConnected) {
-                    setTimeout(() => {
-                        const liveView = document.getElementById('monitorLiveView');
-                        if (liveView) {
-                            liveView.classList.remove('hidden');
-                            
-                            setTimeout(() => {
-                                liveView.classList.add('hidden');
-                            }, 5000);
+                    // Listen for monitors in the room
+                    this.firebaseService.db.ref(`rooms/${roomId}/monitors`).on('value', (snapshot) => {
+                        const monitors = snapshot.val();
+                        if (monitors) {
+                            const monitorCount = Object.keys(monitors).length;
+                            if (monitorCount > 0) {
+                                this.showMonitorLiveView();
+                            }
                         }
-                    }, 1000);
+                    });
+                }
+            }
+            
+            showMonitorLiveView() {
+                const liveView = document.getElementById('monitorLiveView');
+                if (liveView) {
+                    liveView.classList.remove('hidden');
+                    
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        liveView.classList.add('hidden');
+                    }, 5000);
                 }
             }
 
@@ -1857,6 +2027,8 @@
 
                 if (!this.isMonitorView) {
                     this.scheduleMidnightCheck();
+                    this.scheduleWeeklyReport();
+                    this.scheduleMonthlyReport();
                 }
             }
 
@@ -1873,22 +2045,43 @@
                 }, timeUntilMidnight);
             }
 
+            scheduleWeeklyReport() {
+                const now = new Date();
+                const nextMonday = new Date(now);
+                const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
+                nextMonday.setDate(now.getDate() + daysUntilMonday);
+                nextMonday.setHours(12, 0, 0, 0);
+                
+                const timeUntilMonday = nextMonday - now;
+                
+                setTimeout(() => {
+                    this.sendWeeklyReport();
+                    this.scheduleWeeklyReport();
+                }, timeUntilMonday);
+            }
+
+            scheduleMonthlyReport() {
+                const now = new Date();
+                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 12, 0, 0);
+                
+                const timeUntilNextMonth = nextMonth - now;
+                
+                setTimeout(() => {
+                    this.sendMonthlyReport();
+                    this.scheduleMonthlyReport();
+                }, timeUntilNextMonth);
+            }
+
+            // ========== FIREBASE NOTIFICATIONS ==========
             sendStudySessionNotification(session) {
                 if (this.isMonitorView) return;
                 
                 // Send to Firebase
-                this.firebaseService.sendStudyUpdate({
-                    type: 'session_completed',
-                    session: session,
-                    subject: session.subject,
-                    duration: session.duration,
-                    notes: session.notes,
-                    timestamp: new Date().toISOString()
-                });
+                this.firebaseService.sendStudySession(session);
                 
-                // Save notification
+                // Also save local notification
                 const monitorNotification = {
-                    id: 'firebase_study_' + Date.now(),
+                    id: 'mon_study_' + Date.now(),
                     type: 'study',
                     title: '📚 Study Session Completed',
                     message: `Shariq just studied ${session.duration} minutes of ${session.subject}`,
@@ -1898,6 +2091,7 @@
                 };
 
                 this.saveMonitorNotification(monitorNotification);
+                
                 this.updateBadge();
             }
             
@@ -1908,7 +2102,7 @@
                     type: 'timer_started',
                     isRunning: true,
                     subject: timerData.subject,
-                    startTime: new Date().toISOString(),
+                    startTime: Date.now(),
                     elapsed: 0
                 });
             }
@@ -1921,7 +2115,7 @@
                     isRunning: false,
                     subject: timerData.subject,
                     duration: timerData.duration,
-                    endTime: new Date().toISOString()
+                    endTime: Date.now()
                 });
             }
             
@@ -1933,15 +2127,15 @@
                     this.firebaseService.sendTimerUpdate({
                         type: 'timer_update',
                         isRunning: true,
-                        elapsed: elapsedSeconds,
-                        timestamp: Date.now()
+                        startTime: Date.now() - (elapsedSeconds * 1000),
+                        elapsed: elapsedSeconds
                     });
                 }
             }
 
             sendDailyNotification() {
                 const today = new Date().toDateString();
-                if (localStorage.getItem('lastDailyNotificationSent') === today) {
+                if (this.lastDailyNotificationSent === today) {
                     return;
                 }
                 
@@ -1951,9 +2145,34 @@
                 const goal = data.settings.dailyGoal;
                 const goalMet = totalMinutes >= goal;
                 
+                // Student notification
+                const studentNotification = {
+                    id: 'daily_' + Date.now(),
+                    type: 'daily',
+                    title: goalMet ? '🎯 Goal Completed!' : '⏰ Goal Not Met',
+                    message: goalMet 
+                        ? `You completed your study goal today! (${totalMinutes}/${goal} min)`
+                        : `You didn't meet your study goal today. (${totalMinutes}/${goal} min)`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: !goalMet
+                };
+
+                this.saveNotification(studentNotification);
+                
+                // Send to Firebase for monitor
+                this.firebaseService.sendNotification({
+                    type: 'daily_report',
+                    title: goalMet ? '🎯 Student Goal Met!' : '⚠️ Student Goal Not Met',
+                    message: goalMet 
+                        ? `Shariq completed study goal today! (${totalMinutes}/${goal} min)`
+                        : `Shariq didn't meet study goal today. (${totalMinutes}/${goal} min)`,
+                    data: { goalMet, totalMinutes, goal }
+                });
+                
                 // Save monitor notification
                 const monitorNotification = {
-                    id: 'firebase_daily_' + Date.now(),
+                    id: 'mon_daily_' + Date.now(),
                     type: 'daily',
                     title: goalMet ? '🎯 Student Goal Met!' : '⚠️ Student Goal Not Met',
                     message: goalMet 
@@ -1966,9 +2185,129 @@
 
                 this.saveMonitorNotification(monitorNotification);
                 
+                this.lastDailyNotificationSent = today;
                 localStorage.setItem('lastDailyNotificationSent', today);
                 
+                // Browser notification
+                if ('Notification' in window && Notification.permission === 'granted' && !this.isMonitorView) {
+                    new Notification(studentNotification.title, {
+                        body: studentNotification.message,
+                        icon: '/favicon.ico',
+                        tag: 'daily-study'
+                    });
+                }
+                
                 this.updateBadge();
+            }
+
+            sendWeeklyReport() {
+                const now = new Date();
+                const weekNumber = this.getWeekNumber(now);
+                if (this.lastWeeklyReportSent === weekNumber.toString()) {
+                    return;
+                }
+                
+                const sessions = this.db.getWeeklySessions();
+                const totalMinutes = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+                const avgDaily = totalMinutes / 7;
+                
+                // Student notification
+                const studentNotification = {
+                    id: 'weekly_' + Date.now(),
+                    type: 'weekly',
+                    title: '📊 Weekly Report Ready',
+                    message: `Your weekly report is ready! Studied ${totalMinutes} min (${Math.round(avgDaily)} min/day).`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+
+                this.saveNotification(studentNotification);
+                
+                // Send to Firebase
+                this.firebaseService.sendNotification({
+                    type: 'weekly_report',
+                    title: '📊 Weekly Report Ready',
+                    message: `Shariq's weekly report is ready! Studied ${totalMinutes} min (${Math.round(avgDaily)} min/day average).`,
+                    data: { totalMinutes, avgDaily, weekNumber }
+                });
+                
+                // Save monitor notification
+                const monitorNotification = {
+                    id: 'mon_weekly_' + Date.now(),
+                    type: 'weekly',
+                    title: '📊 Weekly Report Ready',
+                    message: `Shariq's weekly report is ready! Studied ${totalMinutes} min (${Math.round(avgDaily)} min/day average).`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+
+                this.saveMonitorNotification(monitorNotification);
+                
+                this.lastWeeklyReportSent = weekNumber;
+                localStorage.setItem('lastWeeklyReportSent', weekNumber);
+                
+                this.updateBadge();
+            }
+
+            sendMonthlyReport() {
+                const now = new Date();
+                const monthYear = `${now.getFullYear()}-${now.getMonth()}`;
+                if (this.lastMonthlyReportSent === monthYear) {
+                    return;
+                }
+                
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                const monthSessions = this.db.load().sessions.filter(s => 
+                    new Date(s.date) >= monthStart
+                );
+                const totalMinutes = monthSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+                
+                // Student notification
+                const studentNotification = {
+                    id: 'monthly_' + Date.now(),
+                    type: 'monthly',
+                    title: '📈 Monthly Report Ready',
+                    message: `Your monthly report is available! Total: ${totalMinutes} min.`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+
+                this.saveNotification(studentNotification);
+                
+                // Send to Firebase
+                this.firebaseService.sendNotification({
+                    type: 'monthly_report',
+                    title: '📈 Monthly Report Ready',
+                    message: `Shariq's monthly report is available! Total: ${totalMinutes} min.`,
+                    data: { totalMinutes, month: now.getMonth(), year: now.getFullYear() }
+                });
+                
+                // Save monitor notification
+                const monitorNotification = {
+                    id: 'mon_monthly_' + Date.now(),
+                    type: 'monthly',
+                    title: '📈 Monthly Report Ready',
+                    message: `Shariq's monthly report is available! Total: ${totalMinutes} min.`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+
+                this.saveMonitorNotification(monitorNotification);
+                
+                this.lastMonthlyReportSent = monthYear;
+                localStorage.setItem('lastMonthlyReportSent', monthYear);
+                
+                this.updateBadge();
+            }
+            
+            getWeekNumber(date) {
+                const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+                const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+                return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
             }
 
             // ========== BIRTHDAY FEATURE ==========
@@ -1993,15 +2332,16 @@
             }
 
             sendBirthdayNotification() {
-                // Send to Firebase
-                this.firebaseService.sendStudyUpdate({
+                // Send birthday notification via Firebase
+                this.firebaseService.sendNotification({
                     type: 'birthday',
-                    message: '🎂 Happy Birthday to the best monitor!',
-                    timestamp: Date.now()
+                    title: '🎂 Happy Birthday to YOU!',
+                    message: 'Your student Shariq has a special birthday message for you!',
+                    special: true
                 });
                 
                 const monitorNotification = {
-                    id: 'firebase_birthday_' + Date.now(),
+                    id: 'mon_birthday_' + Date.now(),
                     type: 'special',
                     title: '🎂 Happy Birthday to YOU!',
                     message: 'Your student Shariq has a special birthday message for you!',
@@ -2156,32 +2496,57 @@
                 const now = new Date();
                 
                 let sessions = [];
+                let startDate = new Date();
                 let title = '';
                 
                 switch(period) {
                     case 'daily':
                         title = 'Daily Study Report';
                         sessions = this.db.getTodaySessions();
+                        startDate.setHours(0, 0, 0, 0);
                         break;
                     case 'weekly':
                         title = 'Weekly Study Report';
                         sessions = this.db.getWeeklySessions();
+                        startDate.setDate(startDate.getDate() - 7);
                         break;
                     case 'monthly':
                         title = 'Monthly Study Report';
-                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                        sessions = data.sessions.filter(s => new Date(s.date) >= monthStart);
+                        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                        sessions = data.sessions.filter(s => new Date(s.date) >= startDate);
                         break;
                     case 'yearly':
                         title = 'Yearly Study Report';
-                        const yearStart = new Date(now.getFullYear(), 0, 1);
-                        sessions = data.sessions.filter(s => new Date(s.date) >= yearStart);
+                        startDate = new Date(now.getFullYear(), 0, 1);
+                        sessions = data.sessions.filter(s => new Date(s.date) >= startDate);
                         break;
                 }
                 
                 const totalMinutes = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
                 const sessionCount = sessions.length;
                 const avgSession = sessionCount > 0 ? totalMinutes / sessionCount : 0;
+                
+                let consistency = 'Good';
+                let trend = 'Steady';
+                let consistencyScore = 0;
+                
+                if (period === 'weekly' || period === 'monthly') {
+                    const studyDays = [...new Set(sessions.map(s => 
+                        new Date(s.date).toDateString()
+                    ))];
+                    
+                    const totalDays = period === 'weekly' ? 7 : 30;
+                    consistencyScore = (studyDays.length / totalDays) * 100;
+                    
+                    if (consistencyScore >= 80) consistency = 'Excellent';
+                    else if (consistencyScore >= 60) consistency = 'Good';
+                    else if (consistencyScore >= 40) consistency = 'Fair';
+                    else consistency = 'Needs Improvement';
+                    
+                    const previousPeriod = this.getPreviousPeriodData(period);
+                    trend = totalMinutes > previousPeriod ? 'Improving' : 
+                           totalMinutes < previousPeriod ? 'Declining' : 'Steady';
+                }
                 
                 return {
                     period,
@@ -2191,8 +2556,40 @@
                     sessionCount,
                     avgSession: Math.round(avgSession),
                     goal: data.settings.dailyGoal,
+                    goalMet: period === 'daily' ? totalMinutes >= data.settings.dailyGoal : null,
+                    consistency,
+                    consistencyScore,
+                    trend,
                     sessions: sessions.slice(0, 50)
                 };
+            }
+
+            getPreviousPeriodData(period) {
+                const data = this.db.load();
+                const now = new Date();
+                let startDate, endDate;
+                
+                switch(period) {
+                    case 'weekly':
+                        startDate = new Date(now);
+                        startDate.setDate(startDate.getDate() - 14);
+                        endDate = new Date(now);
+                        endDate.setDate(endDate.getDate() - 7);
+                        break;
+                    case 'monthly':
+                        startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+                        endDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        break;
+                    default:
+                        return 0;
+                }
+                
+                const previousSessions = data.sessions.filter(s => {
+                    const date = new Date(s.date);
+                    return date >= startDate && date < endDate;
+                });
+                
+                return previousSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
             }
 
             showReport(period = 'daily') {
@@ -2228,11 +2625,10 @@
                 `;
                 
                 if (report.period === 'daily') {
-                    const goalMet = report.totalMinutes >= report.goal;
                     html += `
                             <div class="report-stat">
-                                <div class="report-stat-value ${goalMet ? 'success' : 'warning'}">
-                                    ${goalMet ? '✓' : '✗'}
+                                <div class="report-stat-value ${report.goalMet ? 'success' : 'warning'}">
+                                    ${report.goalMet ? '✓' : '✗'}
                                 </div>
                                 <div class="report-stat-label">Goal: ${report.goal} min</div>
                             </div>
@@ -2240,9 +2636,29 @@
                 } else {
                     html += `
                             <div class="report-stat">
-                                <div class="report-stat-value">${Math.round(report.totalMinutes / 60)}</div>
-                                <div class="report-stat-label">Hours</div>
+                                <div class="report-stat-value">${report.consistency}</div>
+                                <div class="report-stat-label">Consistency</div>
                             </div>
+                            <div class="report-stat">
+                                <div class="report-stat-value">${report.trend}</div>
+                                <div class="report-stat-label">Trend</div>
+                            </div>
+                    `;
+                }
+                
+                html += `</div>`;
+                
+                if (report.period !== 'daily') {
+                    html += `
+                        <div style="margin: 20px 0; padding: 15px; background: var(--bg-highlight); border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="font-weight: 600; color: var(--text-secondary);">Consistency Score:</div>
+                                <div style="flex: 1; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
+                                    <div style="width: ${report.consistencyScore}%; height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-blue)); border-radius: 6px;"></div>
+                                </div>
+                                <div style="font-weight: 700; color: var(--accent-green);">${Math.round(report.consistencyScore)}%</div>
+                            </div>
+                        </div>
                     `;
                 }
                 
@@ -2325,40 +2741,40 @@
                 const link = document.getElementById('monitorLink').textContent;
                 const roomId = document.getElementById('roomId').textContent;
                 
-                const subject = encodeURIComponent(`📚 Firebase Study Tracker Monitor Access - ${name}`);
+                const subject = encodeURIComponent(`📚 Real-Time Study Tracker Monitor Access - ${name}`);
                 const body = encodeURIComponent(`Hello ${name},
 
-You've been invited to monitor Shariq's study progress in REAL-TIME via Firebase!
+You've been invited to monitor Shariq's study progress in REAL-TIME!
 
-📱 **FIREBASE MONITOR ACCESS:**
+📱 **LIVE MONITOR ACCESS:**
 ${link}
 
 🔑 **Room ID (alternative access):**
 ${roomId}
 
-🚀 **REAL-TIME FEATURES (via Firebase):**
+🚀 **REAL-TIME FEATURES (Firebase Powered):**
 • Live timer updates (see timer counting in real-time)
 • Instant session notifications
 • Live progress tracking
-• Cloud synced data
-• No server setup needed
+• No refresh needed - updates instantly
+• Daily/weekly/monthly reports
 
 📝 **Instructions:**
 1. Open the link on any device
 2. Bookmark it or add to home screen
 3. You'll see everything LIVE as it happens
-4. Data is synced via Firebase (no login required)
+4. No login required
 
 Best regards,
-Shariq's Firebase Study Tracker
+Shariq's Real-Time Study Tracker
 
 ---
-*This link gives you live monitor access via Firebase Realtime Database.*`);
+*This link gives you live monitor access to track study progress via Firebase.*`);
                 
                 const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
                 window.open(mailtoLink, '_blank');
                 
-                this.showToast('Email opened with Firebase link! Just hit send.', 'success');
+                this.showToast('Email opened with link! Just hit send.', 'success');
             }
         }
 
@@ -2571,7 +2987,7 @@ Shariq's Firebase Study Tracker
         class FirebaseStudyTracker {
             constructor() {
                 this.db = new StudyDatabase();
-                this.firebaseService = new FirebaseRealTimeService();
+                this.firebaseService = new FirebaseService();
                 this.calendar = new StudyCalendar(this.db);
                 this.weeklyChart = new WeeklyChart(this.db);
                 
@@ -2585,6 +3001,7 @@ Shariq's Firebase Study Tracker
                 this.isRunning = false;
                 this.currentSession = null;
                 this.elapsedSeconds = 0;
+                this.timerUpdateInterval = null;
                 
                 this.init();
             }
@@ -2600,8 +3017,8 @@ Shariq's Firebase Study Tracker
                     this.weeklyChart.render();
                     this.monitor.init();
                     
-                    // Connect to Firebase
-                    this.firebaseService.connect();
+                    // Check Firebase connection status
+                    this.checkFirebaseConnection();
                     
                     // Check if monitor view or joining room
                     if (this.isMonitorView) {
@@ -2610,13 +3027,19 @@ Shariq's Firebase Study Tracker
                         // Join monitor room if provided
                         if (this.monitorRoomId) {
                             this.firebaseService.joinRoom(this.monitorRoomId);
+                        } else {
+                            // Check URL for room ID
+                            const pathRoomId = window.location.pathname.split('/').pop();
+                            if (pathRoomId && pathRoomId.startsWith('room_')) {
+                                this.firebaseService.joinRoom(pathRoomId);
+                            }
                         }
                     } else {
                         // Check for existing room
                         const savedRoomId = localStorage.getItem('study_room_id');
-                        if (savedRoomId && this.firebaseService.isConnected) {
+                        if (savedRoomId) {
                             this.firebaseService.roomId = savedRoomId;
-                            this.firebaseService.setupRoomListener();
+                            this.firebaseService.setupRoomListeners();
                         }
                     }
                     
@@ -2631,12 +3054,19 @@ Shariq's Firebase Study Tracker
                         document.body.style.overflow = 'auto';
                     };
                     
-                    // Setup auto-hide for real-time status
-                    setTimeout(() => {
-                        const status = document.getElementById('realtimeStatus');
-                        if (status) status.style.display = 'none';
-                    }, 5000);
                 }, 800);
+            }
+            
+            checkFirebaseConnection() {
+                const checkInterval = setInterval(() => {
+                    if (this.firebaseService.isConnected) {
+                        document.getElementById('firebaseStatus').textContent = "Firebase connected!";
+                        document.getElementById('firebaseStatus').style.color = "var(--accent-green)";
+                        clearInterval(checkInterval);
+                    } else {
+                        document.getElementById('firebaseStatus').textContent = "Connecting to Firebase...";
+                    }
+                }, 1000);
             }
             
             showMonitorView() {
@@ -2646,14 +3076,14 @@ Shariq's Firebase Study Tracker
                     <i class="fas fa-eye" style="color: var(--accent-blue);"></i>
                     <div>
                         <strong>You are monitoring Shariq</strong><br>
-                        <span class="small text-muted">Firebase Real-time tracking active</span>
+                        <span class="small text-muted">Firebase real-time tracking active</span>
                     </div>
                 `;
                 document.getElementById('monitorStatus').classList.remove('inactive');
                 document.getElementById('monitorStatus').classList.add('active');
                 
                 document.querySelector('.header h1').innerHTML = '<i class="fas fa-eye"></i> Live Monitor View';
-                document.querySelector('.header p').textContent = 'Firebase Real-time tracking of Shariq\'s Study Progress';
+                document.querySelector('.header p').textContent = 'Real-time tracking of Shariq\'s Study Progress via Firebase';
                 
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = true;
@@ -2666,19 +3096,20 @@ Shariq's Firebase Study Tracker
                 document.getElementById('notificationBtn').style.display = 'none';
                 document.getElementById('monitorNotificationBtn').style.display = 'flex';
                 
-                this.showToast('Firebase monitor view active - Real-time updates enabled', 'success');
+                this.showToast('Live monitor view active - Firebase real-time updates enabled', 'success');
             }
             
             updateFromRemote(data) {
                 if (!this.isMonitorView) return;
                 
-                // Update UI based on Firebase data
+                // Update UI based on remote data
                 this.loadData();
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                if (data.type === 'session_completed') {
-                    this.showToast(`📚 Shariq studied ${data.duration} min of ${data.subject}`, 'success');
+                // Show toast for session completion
+                if (data.type === 'session') {
+                    this.showToast(`📚 Shariq studied ${data.session.duration} min of ${data.session.subject}`, 'success');
                 }
             }
             
@@ -2792,17 +3223,17 @@ Shariq's Firebase Study Tracker
                     this.elapsedSeconds = Math.floor((new Date() - this.startTime) / 1000);
                     this.updateTimer();
                     
-                    // Send Firebase timer update
+                    // Send real-time timer update via Firebase
                     this.monitor.sendTimerUpdateNotification(this.elapsedSeconds);
                 }, 1000);
                 
-                // Send timer start notification
+                // Send timer start notification via Firebase
                 this.monitor.sendTimerStartNotification({
                     subject: subject,
                     startTime: this.startTime
                 });
                 
-                this.showToast('Started studying ' + subject + ' (Firebase updates to monitor)', 'success');
+                this.showToast('Started studying ' + subject + ' (Live updates via Firebase to monitor)', 'success');
             }
             
             stopTimer() {
@@ -2821,7 +3252,7 @@ Shariq's Firebase Study Tracker
                 
                 this.db.addSession(session);
                 
-                // Send Firebase notifications
+                // Send real-time notifications via Firebase
                 this.monitor.sendStudySessionNotification(session);
                 this.monitor.sendTimerStopNotification({
                     subject: this.currentSession.subject,
@@ -2841,7 +3272,7 @@ Shariq's Firebase Study Tracker
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Studied ${duration} minutes (Sent to Firebase monitor)`, 'success');
+                this.showToast(`Studied ${duration} minutes (Sent to monitor via Firebase)`, 'success');
             }
             
             updateTimer() {
@@ -2911,7 +3342,7 @@ Shariq's Firebase Study Tracker
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Saved corrected time: ${duration} minutes (Sent to Firebase monitor)`, 'success');
+                this.showToast(`Saved corrected time: ${duration} minutes (Sent to monitor via Firebase)`, 'success');
             }
             
             saveManualSession() {
@@ -2942,7 +3373,7 @@ Shariq's Firebase Study Tracker
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Added ${duration} minute session (Sent to Firebase monitor)`, 'success');
+                this.showToast(`Added ${duration} minute session (Sent to monitor via Firebase)`, 'success');
             }
             
             showMonitorModal() {
@@ -2954,16 +3385,19 @@ Shariq's Firebase Study Tracker
                 if (!roomId) {
                     roomId = this.firebaseService.createRoom('Study Monitor');
                 } else {
-                    document.getElementById('monitorLink').textContent = 
-                        window.location.href.split('?')[0] + '?monitor=true&room=' + roomId;
-                    document.getElementById('roomId').textContent = roomId;
+                    // Update existing room
+                    this.firebaseService.roomId = roomId;
+                    this.firebaseService.setupRoomListeners();
                 }
                 
                 // Generate monitor link
                 let monitorLink = window.location.href.split('?')[0];
                 monitorLink += '?monitor=true&room=' + roomId;
                 
-                document.getElementById('monitorLink').textContent = monitorLink;
+                // Alternative simple link
+                const simpleLink = window.location.origin + '/monitor/' + roomId;
+                
+                document.getElementById('monitorLink').textContent = simpleLink;
                 document.getElementById('roomId').textContent = roomId;
                 
                 // Set monitor name if exists
@@ -2976,7 +3410,7 @@ Shariq's Firebase Study Tracker
             copyMonitorLink() {
                 const link = document.getElementById('monitorLink').textContent;
                 navigator.clipboard.writeText(link).then(() => {
-                    this.showToast('Firebase monitor link copied!', 'success');
+                    this.showToast('Monitor link copied!', 'success');
                 });
             }
             
@@ -2992,7 +3426,7 @@ Shariq's Firebase Study Tracker
                 
                 localStorage.setItem('monitor_name', name);
                 
-                let monitorLink = window.location.href.split('?')[0] + '?monitor=true&room=' + roomId;
+                let monitorLink = window.location.origin + '/monitor/' + roomId;
                 document.getElementById('monitorLink').textContent = monitorLink;
                 document.getElementById('roomId').textContent = roomId;
                 
@@ -3043,7 +3477,7 @@ Shariq's Firebase Study Tracker
                         <i class="fas fa-user-check" style="color: var(--accent-green);"></i>
                         <div>
                             <strong>Monitor: ${data.settings.monitor.name}</strong><br>
-                            <span class="small text-muted">Firebase Real-time connected</span>
+                            <span class="small text-muted">Firebase real-time connected</span>
                         </div>
                     `;
                 } else {
@@ -3105,66 +3539,5 @@ Shariq's Firebase Study Tracker
             }
         });
     </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>My Firebase Website</title>
-
-    <!-- === Your existing CSS === -->
-    <style>
-        /* === Reset and base === */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f2f2f2;
-        }
-
-        h1 {
-            text-align: center;
-            margin-top: 50px;
-        }
-
-        /* Add your other existing CSS here */
-    </style>
-
-    <!-- === Firebase SDKs === -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
-</head>
-<body>
-
-<h1>Firebase is Ready!</h1>
-
-<!-- === Firebase Initialization === -->
-<script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyB9b15bG0Cc-mp2B7zFtqBkQU7swYS32YY",
-        authDomain: "study-tracker-a207b.firebaseapp.com",
-        databaseURL: "https://study-tracker-a207b-default-rtdb.firebaseio.com",
-        projectId: "study-tracker-a207b",
-        storageBucket: "study-tracker-a207b.firebasestorage.app",
-        messagingSenderId: "1082920157508",
-        appId: "1:1082920157508:web:c38d54edf9d934b4939711"
-    };
-
-    // Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-
-    // Initialize Firestore
-    const db = firebase.firestore();
-
-    // Example: Add test data to Firestore
-    db.collection("testCollection").add({
-        name: "Sharique",
-        timestamp: new Date()
-    })
-    .then(() => console.log("Data added to Firestore!"))
-    .catch((error) => console.error("Error adding data:", error));
-</script>
-
 </body>
 </html>
