@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌙 Study Tracker - Peer to Peer</title>
+    <title>🌙 Study Tracker - Real Time</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
-        /* === ALL PREVIOUS STYLES STAY THE SAME === */
+        /* === RESET & BASE === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
@@ -31,10 +35,13 @@
             padding: 20px;
         }
         
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
         
-        /* === PEER CONNECTION STATUS === */
-        .peer-status {
+        /* === REAL TIME STATUS === */
+        .realtime-status {
             position: fixed;
             top: 80px;
             right: 20px;
@@ -49,13 +56,14 @@
             gap: 10px;
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
             animation: slideInRight 0.3s;
+            display: none;
         }
         
-        .peer-status.disconnected {
+        .realtime-status.disconnected {
             background: var(--accent-red);
         }
         
-        .peer-status.connecting {
+        .realtime-status.syncing {
             background: var(--accent-orange);
         }
         
@@ -88,6 +96,24 @@
         
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        
+        /* === HEADER === */
+        .header {
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            color: var(--accent-purple);
+            margin-bottom: 5px;
         }
         
         /* === MONITOR HEADER === */
@@ -127,6 +153,7 @@
             backdrop-filter: blur(10px);
         }
         
+        /* === LIVE TIMER FOR MONITOR === */
         .live-timer-badge {
             background: rgba(239, 68, 68, 0.9);
             color: white;
@@ -138,7 +165,57 @@
             align-items: center;
             gap: 8px;
             animation: pulse 1.5s infinite;
+        }
+        
+        /* === BIRTHDAY MESSAGE === */
+        .birthday-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9998;
             display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .birthday-card {
+            background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
+            padding: 50px;
+            border-radius: 30px;
+            text-align: center;
+            max-width: 700px;
+            width: 90%;
+            color: white;
+            box-shadow: 0 30px 80px rgba(245, 158, 11, 0.6);
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        .birthday-card h2 {
+            font-size: 3.5rem;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .birthday-card p {
+            font-size: 1.5rem;
+            line-height: 1.7;
+            margin-bottom: 30px;
+        }
+        
+        .birthday-message {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 30px;
+            border-radius: 20px;
+            margin: 30px 0;
+            font-style: italic;
+            font-size: 1.4rem;
+            border: 3px dashed rgba(255, 255, 255, 0.4);
         }
         
         @keyframes pulse {
@@ -146,46 +223,89 @@
             50% { transform: scale(1.05); opacity: 0.9; }
         }
         
-        /* === MONITOR LIVE VIEW === */
-        .monitor-live-view {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
-            color: white;
-            padding: 15px 25px;
-            border-radius: 15px;
+        /* === NOTIFICATION BUTTON === */
+        .notification-btn {
+            position: relative;
+            background: var(--bg-highlight);
+            border: none;
+            color: var(--text-primary);
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 15px;
-            z-index: 100;
-            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-            animation: slideInUp 0.5s;
+            justify-content: center;
+            transition: all 0.3s;
+            font-size: 1.3rem;
         }
         
-        .monitor-live-view.hidden {
-            display: none;
+        .notification-btn:hover {
+            background: var(--accent-purple);
+            color: white;
+            transform: scale(1.1);
         }
         
-        @keyframes slideInUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        .monitor-header .notification-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            backdrop-filter: blur(10px);
         }
         
-        .live-status-dot {
-            width: 12px;
-            height: 12px;
-            background: var(--accent-green);
+        .monitor-header .notification-btn:hover {
+            background: rgba(255, 255, 255, 0.35);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--accent-red);
+            color: white;
             border-radius: 50%;
-            animation: livePulse 1.5s infinite;
+            width: 24px;
+            height: 24px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 3px 8px rgba(239, 68, 68, 0.5);
+            animation: badgePulse 2s infinite;
         }
         
-        @keyframes livePulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0.7; }
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
         
-        /* === CARD STYLES === */
+        /* === LAYOUT === */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+        
+        @media (max-width: 992px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* === LEFT COLUMN (Timer + Reports) === */
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        /* === RIGHT COLUMN (Stats + Calendar) === */
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        /* === CARDS === */
         .card {
             background: var(--bg-card);
             border-radius: 18px;
@@ -211,8 +331,15 @@
             border-bottom: 2px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* === TIMER === */
-        .timer-card { border-left: 6px solid var(--accent-purple); }
+        .card h2 i {
+            color: var(--accent-purple);
+            font-size: 1.3rem;
+        }
+        
+        /* === TIMER CARD === */
+        .timer-card {
+            border-left: 6px solid var(--accent-purple);
+        }
         
         .timer-display {
             font-size: 4rem;
@@ -267,6 +394,11 @@
             color: white;
         }
         
+        .btn-secondary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4b5563, #374151);
+            transform: translateY(-3px);
+        }
+        
         .btn-success {
             background: linear-gradient(135deg, var(--accent-green), #059669);
             color: white;
@@ -283,12 +415,56 @@
             color: white;
         }
         
-        .btn-block { width: 100%; margin-top: 15px; justify-content: center; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-        .btn-small { padding: 10px 20px; font-size: 0.95rem; min-height: 44px; }
+        .btn-block {
+            width: 100%;
+            margin-top: 15px;
+            justify-content: center;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
+        .btn-small {
+            padding: 10px 20px;
+            font-size: 0.95rem;
+            min-height: 44px;
+        }
+        
+        /* === REPORT BUTTONS === */
+        .report-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        @media (max-width: 576px) {
+            .report-buttons { grid-template-columns: 1fr; }
+        }
+        
+        .report-btn {
+            padding: 16px;
+            font-size: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            text-align: center;
+        }
+        
+        .report-btn i {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
         
         /* === FORMS === */
-        .form-group { margin-bottom: 25px; }
+        .form-group {
+            margin-bottom: 25px;
+        }
         
         .form-group label {
             display: block;
@@ -338,6 +514,22 @@
             text-align: center;
             border: 1px solid rgba(255, 255, 255, 0.08);
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-item::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            right: 0; bottom: 0;
+            background: linear-gradient(135deg, transparent, rgba(139, 92, 246, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .stat-item:hover::before {
+            opacity: 1;
         }
         
         .stat-item:hover {
@@ -352,12 +544,16 @@
             background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            position: relative;
+            z-index: 1;
         }
         
         .stat-label {
             font-size: 0.95rem;
             color: var(--text-secondary);
             font-weight: 500;
+            position: relative;
+            z-index: 1;
         }
         
         /* === PROGRESS BAR === */
@@ -389,6 +585,24 @@
             background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
             border-radius: 7px;
             transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
         
         /* === SESSIONS TABLE === */
@@ -418,6 +632,10 @@
         .sessions-table td {
             padding: 16px 18px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .sessions-table tr:last-child td {
+            border-bottom: none;
         }
         
         .sessions-table tr:hover {
@@ -452,12 +670,32 @@
             border: 2px solid transparent;
         }
         
-        .calendar-day.empty { background: transparent; visibility: hidden; }
-        .calendar-day.has-study { background: linear-gradient(135deg, var(--accent-purple), #7c3aed); color: white; font-weight: 700; }
-        .calendar-day.today { border-color: var(--accent-orange); background: var(--accent-orange); color: white; }
+        .calendar-day.empty {
+            background: transparent;
+            visibility: hidden;
+        }
+        
+        .calendar-day.has-study {
+            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+            color: white;
+            font-weight: 700;
+        }
+        
+        .calendar-day.today {
+            border-color: var(--accent-orange);
+            background: var(--accent-orange);
+            color: white;
+        }
+        
+        .calendar-day:hover:not(.empty) {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
         
         /* === WEEKLY CHART === */
-        .weekly-chart { margin-top: 20px; }
+        .weekly-chart {
+            margin-top: 20px;
+        }
         
         .chart-bar {
             display: flex;
@@ -466,7 +704,12 @@
             gap: 15px;
         }
         
-        .chart-day { width: 50px; font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+        .chart-day {
+            width: 50px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
         
         .chart-bar-container {
             flex: 1;
@@ -482,9 +725,27 @@
             background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
             border-radius: 12px;
             transition: width 1s ease-out;
+            position: relative;
         }
         
-        .chart-value { width: 60px; font-size: 0.9rem; color: var(--text-secondary); text-align: right; font-weight: 500; }
+        .chart-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 3s infinite;
+        }
+        
+        .chart-value {
+            width: 60px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-align: right;
+            font-weight: 500;
+        }
         
         /* === MONITOR STATUS === */
         .monitor-status {
@@ -498,9 +759,18 @@
             border-left: 5px solid var(--accent-green);
         }
         
-        .monitor-status.inactive { border-left-color: var(--accent-red); }
-        .monitor-status i { font-size: 2rem; color: var(--accent-green); }
-        .monitor-status.inactive i { color: var(--accent-red); }
+        .monitor-status.inactive {
+            border-left-color: var(--accent-red);
+        }
+        
+        .monitor-status i {
+            font-size: 2rem;
+            color: var(--accent-green);
+        }
+        
+        .monitor-status.inactive i {
+            color: var(--accent-red);
+        }
         
         /* === MODALS === */
         .modal {
@@ -526,6 +796,10 @@
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
             animation: modalAppear 0.3s ease-out;
+        }
+        
+        .modal-content.large {
+            max-width: 800px;
         }
         
         @keyframes modalAppear {
@@ -571,7 +845,10 @@
         }
         
         /* === NOTIFICATION PANEL === */
-        .notification-list { max-height: 500px; overflow-y: auto; }
+        .notification-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
         
         .notification-item {
             padding: 20px;
@@ -581,6 +858,7 @@
             align-items: flex-start;
             cursor: pointer;
             transition: all 0.3s;
+            position: relative;
             border-radius: 12px;
             margin-bottom: 10px;
         }
@@ -600,9 +878,22 @@
             border-left: 4px solid var(--accent-red);
         }
         
-        .notification-icon { color: var(--accent-purple); font-size: 1.5rem; width: 40px; text-align: center; padding-top: 5px; }
+        .notification-item.special {
+            background: rgba(245, 158, 11, 0.15);
+            border-left: 4px solid var(--accent-orange);
+        }
         
-        .notification-content { flex: 1; }
+        .notification-icon {
+            color: var(--accent-purple);
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+            padding-top: 5px;
+        }
+        
+        .notification-content {
+            flex: 1;
+        }
         
         .notification-title {
             font-weight: 700;
@@ -649,6 +940,103 @@
             opacity: 0.5;
         }
         
+        .notification-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        /* === REPORT STYLES === */
+        .report-summary {
+            margin-bottom: 30px;
+        }
+        
+        .report-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        
+        .report-stat {
+            background: var(--bg-highlight);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .report-stat:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .report-stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .report-stat-value.success {
+            background: linear-gradient(135deg, var(--accent-green), #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .report-stat-value.warning {
+            background: linear-gradient(135deg, var(--accent-orange), #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .report-stat-label {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        
+        .report-sessions {
+            margin-top: 30px;
+        }
+        
+        .report-sessions h4 {
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .special-message {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .special-message h4 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .special-message p {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
         /* === TOAST === */
         .toast {
             position: fixed;
@@ -683,52 +1071,93 @@
         .mt-10 { margin-top: 10px; }
         .mt-15 { margin-top: 15px; }
         .mt-20 { margin-top: 20px; }
+        .mt-25 { margin-top: 25px; }
         .mb-10 { margin-bottom: 10px; }
         .mb-15 { margin-bottom: 15px; }
         .mb-20 { margin-bottom: 20px; }
         .small { font-size: 0.9rem; }
         .strong { font-weight: 700; }
         
-        /* === LAYOUT === */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 30px;
-        }
-        
-        @media (max-width: 992px) {
-            .main-grid { grid-template-columns: 1fr; }
-        }
-        
-        .left-column, .right-column {
+        /* === EDIT SESSION MODAL === */
+        .edit-session-options {
             display: flex;
-            flex-direction: column;
-            gap: 30px;
+            gap: 15px;
+            margin-bottom: 25px;
         }
         
-        /* === BIRTHDAY OVERLAY === */
-        .birthday-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 9998;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(10px);
-        }
-        
-        .birthday-card {
-            background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
-            padding: 50px;
-            border-radius: 30px;
+        .edit-option-btn {
+            flex: 1;
+            padding: 20px;
+            background: var(--bg-highlight);
+            border: 2px solid transparent;
+            border-radius: 15px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s;
             text-align: center;
-            max-width: 700px;
-            width: 90%;
+        }
+        
+        .edit-option-btn:hover {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: var(--accent-purple);
+        }
+        
+        .edit-option-btn.active {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--accent-purple);
+            color: var(--accent-purple);
+        }
+        
+        .edit-option-btn i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        /* === MONITOR LIVE VIEW === */
+        .monitor-live-view {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
             color: white;
-            box-shadow: 0 30px 80px rgba(245, 158, 11, 0.6);
-            border: 4px solid rgba(255, 255, 255, 0.3);
+            padding: 15px 25px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            animation: slideInUp 0.5s;
+        }
+        
+        .monitor-live-view.hidden {
+            display: none;
+        }
+        
+        @keyframes slideInUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .live-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+        
+        .live-status-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: livePulse 1.5s infinite;
+        }
+        
+        @keyframes livePulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
         }
     </style>
 </head>
@@ -736,17 +1165,17 @@
     <!-- Loading Screen -->
     <div id="loading">
         <div class="spinner"></div>
-        <h2>Starting Peer-to-Peer Study Tracker...</h2>
+        <h2>Starting Real-Time Study Tracker...</h2>
     </div>
 
-    <!-- Peer Connection Status -->
-    <div class="peer-status" id="peerStatus" style="display: none;">
+    <!-- Real Time Status Indicator -->
+    <div class="realtime-status" id="realtimeStatus">
         <i class="fas fa-plug"></i>
-        <span id="peerStatusText">Connecting...</span>
+        <span>Connected to server</span>
     </div>
 
     <!-- Monitor Live View Indicator (for student) -->
-    <div class="monitor-live-view hidden" id="monitorLiveView">
+    <div class="monitor-live-view" id="monitorLiveView">
         <div class="live-status">
             <div class="live-status-dot"></div>
             <span>Monitor is watching live</span>
@@ -761,12 +1190,14 @@
         <div class="birthday-card">
             <h2><i class="fas fa-birthday-cake"></i> Happy Birthday! <i class="fas fa-heart" style="color: #ec4899;"></i></h2>
             <p>To the most amazing study monitor in the world!</p>
+            
             <div class="birthday-message">
                 <p>"I wish you a really great upcoming year and thanks for helping me."</p>
                 <p style="font-size: 1.4rem; font-weight: bold; margin-top: 15px;">
                     Can I buy a gift for you? 🎁
                 </p>
             </div>
+            
             <button class="btn btn-primary" id="closeBirthdayBtn" style="padding: 15px 40px; font-size: 1.2rem;">
                 <i class="fas fa-heart"></i> Thank You! Let's Continue
             </button>
@@ -777,7 +1208,7 @@
     <div class="monitor-header" id="monitorHeader">
         <div class="monitor-header-info">
             <h2><i class="fas fa-eye"></i> Live Monitor Dashboard</h2>
-            <span class="monitor-badge" id="monitorBadge">Peer-to-Peer</span>
+            <span class="monitor-badge" id="monitorBadge">Live Tracking</span>
             <div id="monitorTimerBadge" class="live-timer-badge" style="display: none;">
                 <i class="fas fa-clock"></i>
                 <span id="monitorTimerText">00:00:00</span>
@@ -786,7 +1217,7 @@
                 <i class="fas fa-sync-alt"></i> Live Updates
             </span>
         </div>
-        <button class="notification-btn" id="monitorNotificationBtn" style="display: none;">
+        <button class="notification-btn" id="monitorNotificationBtn">
             <i class="fas fa-bell"></i>
             <span class="notification-badge" id="monitorNotificationBadge"></span>
         </button>
@@ -802,27 +1233,20 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Monitor's Name</label>
-                    <input type="text" id="monitorName" placeholder="e.g., Mom, Study Buddy">
+                    <input type="text" id="monitorName" placeholder="e.g., Study Buddy">
                 </div>
                 <div class="form-group">
-                    <label>Share this QR Code with your monitor:</label>
-                    <div id="qrCodeContainer" style="background: white; padding: 20px; border-radius: 12px; margin: 15px 0; display: flex; justify-content: center;">
-                        <canvas id="qrCodeCanvas"></canvas>
-                    </div>
-                    <small class="text-muted">Scan with phone camera or QR scanner</small>
-                </div>
-                <div class="form-group">
-                    <label>Or share this link:</label>
+                    <label>Share this link with your monitor:</label>
                     <div style="background: var(--bg-highlight); padding: 15px; border-radius: 12px; margin-top: 10px; word-break: break-all;">
                         <span id="monitorLink" style="color: var(--accent-blue); font-weight: 600;">Loading...</span>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Room ID (Alternative access):</label>
+                    <label>Room ID (Auto-generated)</label>
                     <div style="background: var(--bg-highlight); padding: 15px; border-radius: 12px; margin-top: 5px; font-family: monospace;">
                         <span id="roomId" style="color: var(--accent-green); font-weight: 600;">Generating...</span>
                     </div>
-                    <small class="text-muted">Share this if QR/link doesn't work</small>
+                    <small class="text-muted">Share this Room ID if link doesn't work</small>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn btn-secondary" id="copyLinkBtn" style="flex: 1;">
@@ -860,6 +1284,7 @@
                     </div>
                 </div>
                 
+                <!-- Fix Timer Form -->
                 <div id="fixTimerForm">
                     <div class="form-group">
                         <label>Actual Duration (minutes)</label>
@@ -875,6 +1300,7 @@
                     </button>
                 </div>
                 
+                <!-- Add Manual Form (hidden by default) -->
                 <div id="addManualForm" style="display: none;">
                     <div class="form-group">
                         <label>Date</label>
@@ -922,14 +1348,37 @@
         </div>
     </div>
 
+    <!-- Report Modal -->
+    <div class="modal" id="reportModal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3 id="reportTitle">Report</h3>
+                <div>
+                    <button class="btn btn-secondary" id="exportReportBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="close-modal">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="report-info">
+                    <span id="reportDate" class="text-muted"></span>
+                </div>
+                <div id="reportContent" class="report-content">
+                    <!-- Report content goes here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main App -->
     <div class="container" id="app" style="display: none;">
         <!-- Header -->
         <header class="header">
             <div class="header-content">
                 <div>
-                    <h1><i class="fas fa-moon"></i> Peer-to-Peer Study Tracker</h1>
-                    <p class="text-muted">Real-time updates without servers</p>
+                    <h1><i class="fas fa-moon"></i> Real-Time Study Tracker</h1>
+                    <p class="text-muted">Live updates for your monitor</p>
                 </div>
                 <button class="notification-btn" id="notificationBtn">
                     <i class="fas fa-bell"></i>
@@ -965,16 +1414,17 @@
                         <label>Notes (optional)</label>
                         <textarea id="sessionNotes" placeholder="What are you studying?"></textarea>
                     </div>
-                    <div class="peer-info" style="padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px; margin-top: 15px;">
-                        <i class="fas fa-wifi"></i>
-                        <span class="small" id="connectionInfo">Setting up peer connection...</span>
+                    <div class="realtime-info" style="padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px; margin-top: 15px;">
+                        <i class="fas fa-sync-alt"></i>
+                        <span class="small">Live updates sent to monitor in real-time</span>
                     </div>
                 </div>
 
                 <!-- Reports Card -->
                 <div class="card">
                     <h2><i class="fas fa-chart-pie"></i> Study Reports</h2>
-                    <p class="text-muted mb-20">Generate detailed study reports</p>
+                    <p class="text-muted mb-20">Generate detailed study reports for monitor</p>
+                    
                     <div class="report-buttons">
                         <button class="btn btn-secondary report-btn" id="dailyReportBtn">
                             <i class="fas fa-calendar-day"></i> Daily Report
@@ -1028,10 +1478,10 @@
                         <i class="fas fa-user-plus"></i> Invite Monitor
                     </button>
                     <div class="mt-15 text-muted small" style="padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px;">
-                        <i class="fas fa-sync-alt"></i> <strong>Sync Status:</strong> <span id="syncStatus">Not connected</span>
+                        <i class="fas fa-broadcast-tower"></i> <strong>Live Updates:</strong> Monitor sees changes in real-time
                     </div>
                     <div class="mt-10 text-muted small" style="padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 10px;">
-                        <i class="fas fa-users"></i> <strong>Peer Connection:</strong> <span id="peerConnStatus">Offline</span>
+                        <i class="fas fa-clock"></i> <strong>Live Timer:</strong> Monitor sees timer counting in real-time
                     </div>
                 </div>
 
@@ -1077,13 +1527,20 @@
                         <button class="btn btn-secondary btn-small" id="prevMonthBtn">
                             <i class="fas fa-chevron-left"></i>
                         </button>
-                        <h3 id="currentMonth" style="margin: 0;">Loading...</h3>
+                        <h3 id="currentMonth" style="margin: 0;">December 2024</h3>
                         <button class="btn btn-secondary btn-small" id="nextMonthBtn">
                             <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
                     <div class="calendar-grid" id="calendarGrid">
                         <!-- Calendar will be generated here -->
+                    </div>
+                    <div class="mt-20 text-center">
+                        <span class="small text-muted">
+                            <i class="fas fa-square" style="color: var(--accent-purple);"></i> Days with study
+                            &nbsp;&nbsp;
+                            <i class="fas fa-square" style="color: var(--accent-orange);"></i> Today
+                        </span>
                     </div>
                 </div>
 
@@ -1098,354 +1555,810 @@
         </div>
     </div>
 
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-
     <script>
-        // ========== SIMPLE PEER-TO-PEER SYNCHRONIZATION ==========
-        class PeerSync {
-            constructor(isMonitor = false) {
-                this.isMonitor = isMonitor;
+        // ========== FIREBASE CONFIGURATION ==========
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9b15bG0Cc-mp2B7zFtqBkQU7swYS32YY",
+            authDomain: "study-tracker-a207b.firebaseapp.com",
+            databaseURL: "https://study-tracker-a207b-default-rtdb.firebaseio.com",
+            projectId: "study-tracker-a207b",
+            storageBucket: "study-tracker-a207b.firebasestorage.app",
+            messagingSenderId: "1082920157508",
+            appId: "1:1082920157508:web:c38d54edf9d934b4939711"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // ========== FIREBASE REAL-TIME SERVICE ==========
+        class FirebaseRealTimeService {
+            constructor() {
+                this.isConnected = false;
                 this.roomId = null;
-                this.peerConnections = new Map();
-                this.dataChannel = null;
-                this.lastSyncTime = 0;
-                this.syncInterval = 5000; // Sync every 5 seconds
-                this.broadcastInterval = null;
-                
-                // Use BroadcastChannel API for same-origin sync (works in same browser)
-                this.broadcastChannel = null;
-                
-                // For cross-device sync, we'll use a simpler polling mechanism
-                this.storageKey = 'study_tracker_sync';
-                this.storageKeyMonitor = 'study_tracker_monitor';
-                
-                this.init();
+                this.userId = this.generateUserId();
+                this.isMonitor = false;
+                this.roomRef = null;
+                this.connectionRef = null;
             }
             
-            init() {
-                // Check URL for room ID
-                const urlParams = new URLSearchParams(window.location.search);
-                this.roomId = urlParams.get('room') || localStorage.getItem('study_room_id');
-                
-                if (this.isMonitor && this.roomId) {
-                    this.setupMonitorSync();
-                } else if (!this.isMonitor) {
-                    this.setupStudentSync();
-                }
-                
-                // Try BroadcastChannel for same-browser sync
-                if ('BroadcastChannel' in window) {
-                    this.broadcastChannel = new BroadcastChannel('study_tracker');
-                    this.broadcastChannel.onmessage = (event) => {
-                        this.handleBroadcastMessage(event.data);
-                    };
-                }
-                
-                this.updateConnectionStatus();
+            generateUserId() {
+                return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             }
             
-            setupStudentSync() {
-                // Generate room ID if not exists
-                if (!this.roomId) {
-                    this.roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-                    localStorage.setItem('study_room_id', this.roomId);
-                }
-                
-                // Start broadcasting data periodically
-                this.broadcastInterval = setInterval(() => {
-                    this.broadcastStudentData();
-                }, this.syncInterval);
-                
-                console.log('Student sync setup with room:', this.roomId);
-            }
-            
-            setupMonitorSync() {
-                // Monitor polls for student data
-                this.broadcastInterval = setInterval(() => {
-                    this.pollStudentData();
-                }, this.syncInterval);
-                
-                console.log('Monitor sync setup for room:', this.roomId);
-            }
-            
-            broadcastStudentData() {
-                const studentData = this.getStudentData();
-                const syncData = {
-                    type: 'student_update',
-                    roomId: this.roomId,
-                    data: studentData,
-                    timestamp: Date.now()
-                };
-                
-                // Store in localStorage for monitor to read
-                localStorage.setItem(this.storageKey, JSON.stringify(syncData));
-                
-                // Also broadcast via BroadcastChannel if available
-                if (this.broadcastChannel) {
-                    this.broadcastChannel.postMessage(syncData);
-                }
-                
+            connect() {
+                this.isConnected = true;
                 this.updateConnectionStatus(true);
+                
+                // Monitor Firebase connection state
+                const connectedRef = database.ref('.info/connected');
+                connectedRef.on('value', (snap) => {
+                    if (snap.val() === true) {
+                        this.isConnected = true;
+                        this.updateConnectionStatus(true);
+                    } else {
+                        this.isConnected = false;
+                        this.updateConnectionStatus(false);
+                    }
+                });
+                
+                return this.isConnected;
             }
             
-            pollStudentData() {
-                try {
-                    // Try to read student data from localStorage
-                    const storedData = localStorage.getItem(this.storageKey);
-                    if (storedData) {
-                        const syncData = JSON.parse(storedData);
+            updateConnectionStatus(connected) {
+                const statusElement = document.getElementById('realtimeStatus');
+                if (statusElement) {
+                    statusElement.style.display = 'flex';
+                    
+                    if (connected) {
+                        statusElement.className = 'realtime-status';
+                        statusElement.innerHTML = `
+                            <i class="fas fa-fire"></i>
+                            <span>Connected to Firebase</span>
+                        `;
                         
-                        // Check if this data is for our room
-                        if (syncData.roomId === this.roomId && syncData.type === 'student_update') {
-                            this.handleStudentUpdate(syncData.data);
-                            this.updateConnectionStatus(true);
-                            return;
-                        }
+                        setTimeout(() => {
+                            if (statusElement) {
+                                statusElement.style.display = 'none';
+                            }
+                        }, 3000);
+                    } else {
+                        statusElement.className = 'realtime-status disconnected';
+                        statusElement.innerHTML = `
+                            <i class="fas fa-unlink"></i>
+                            <span>Disconnected from Firebase</span>
+                        `;
                     }
-                    
-                    // Also check BroadcastChannel messages
-                    this.updateConnectionStatus(false);
-                    
-                } catch (error) {
-                    console.error('Error polling student data:', error);
-                    this.updateConnectionStatus(false);
                 }
             }
             
-            getStudentData() {
-                // Get all relevant student data
-                const db = new StudyDatabase();
-                const data = db.load();
-                const todaySessions = db.getTodaySessions();
-                const totalMinutes = todaySessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+            createRoom(monitorName) {
+                this.roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+                localStorage.setItem('study_room_id', this.roomId);
+                localStorage.setItem('monitor_name', monitorName);
                 
-                return {
-                    sessions: todaySessions,
-                    totalMinutes: totalMinutes,
-                    sessionsCount: todaySessions.length,
-                    goal: data.settings.dailyGoal,
-                    goalProgress: data.settings.dailyGoal > 0 ? 
-                        Math.min((totalMinutes / data.settings.dailyGoal) * 100, 100) : 0,
-                    streak: data.stats.streak,
+                // Create room in Firebase
+                const roomRef = database.ref('rooms/' + this.roomId);
+                roomRef.set({
+                    created: Date.now(),
+                    monitorName: monitorName,
+                    studentId: this.userId,
+                    active: true
+                });
+                
+                // Set up room listener
+                this.setupRoomListener();
+                
+                return this.roomId;
+            }
+            
+            joinRoom(roomId) {
+                this.roomId = roomId;
+                this.isMonitor = true;
+                
+                const roomRef = database.ref('rooms/' + roomId);
+                roomRef.update({
+                    monitorId: this.userId,
+                    monitorJoined: Date.now()
+                });
+                
+                this.setupRoomListener();
+            }
+            
+            setupRoomListener() {
+                if (!this.roomId) return;
+                
+                this.roomRef = database.ref('rooms/' + this.roomId);
+                this.roomRef.on('value', (snapshot) => {
+                    const roomData = snapshot.val();
+                    if (roomData) {
+                        this.handleRoomUpdate(roomData);
+                    }
+                });
+                
+                // Set up data listener
+                this.dataRef = database.ref('study_data/' + this.roomId);
+                this.dataRef.on('child_added', (snapshot) => {
+                    const data = snapshot.val();
+                    this.handleStudyData(data);
+                });
+                
+                // Set up timer listener
+                this.timerRef = database.ref('timers/' + this.roomId);
+                this.timerRef.on('value', (snapshot) => {
+                    const timerData = snapshot.val();
+                    this.handleTimerData(timerData);
+                });
+            }
+            
+            handleRoomUpdate(roomData) {
+                // For student: show that monitor has joined
+                if (!this.isMonitor && roomData.monitorId) {
+                    this.showMonitorJoinedNotification(roomData);
+                }
+            }
+            
+            handleStudyData(data) {
+                if (this.isMonitor) {
+                    // Monitor receives study updates from student
+                    if (window.studyTracker && data) {
+                        window.studyTracker.updateFromRemote(data);
+                    }
+                    
+                    // Show notification
+                    this.showStudyNotification(data);
+                }
+            }
+            
+            handleTimerData(timerData) {
+                if (this.isMonitor) {
+                    this.updateMonitorTimer(timerData);
+                }
+            }
+            
+            sendStudyUpdate(session) {
+                if (!this.roomId) return;
+                
+                const updateRef = database.ref('study_data/' + this.roomId).push();
+                updateRef.set({
+                    ...session,
                     timestamp: Date.now(),
-                    isTimerRunning: window.studyTracker ? window.studyTracker.isRunning : false,
-                    timerElapsed: window.studyTracker ? window.studyTracker.elapsedSeconds : 0,
-                    currentSubject: window.studyTracker && window.studyTracker.currentSession ? 
-                        window.studyTracker.currentSession.subject : null
-                };
+                    userId: this.userId,
+                    type: 'study_session'
+                });
             }
             
-            handleStudentUpdate(studentData) {
-                if (!this.isMonitor) return;
+            sendTimerUpdate(timerData) {
+                if (!this.roomId) return;
                 
-                // Update monitor UI with student data
-                this.updateMonitorUI(studentData);
-                
-                // Store for UI updates
-                localStorage.setItem(this.storageKeyMonitor, JSON.stringify(studentData));
+                database.ref('timers/' + this.roomId).set({
+                    ...timerData,
+                    timestamp: Date.now(),
+                    userId: this.userId
+                });
             }
             
-            handleBroadcastMessage(data) {
-                if (data.type === 'student_update' && data.roomId === this.roomId) {
-                    if (this.isMonitor) {
-                        this.handleStudentUpdate(data.data);
+            showStudyNotification(studyData) {
+                if (this.isMonitor && studyData) {
+                    const notification = {
+                        id: 'firebase_study_' + Date.now(),
+                        type: 'study',
+                        title: '📚 Live Study Session',
+                        message: `${studyData.subject || 'Unknown'} for ${studyData.duration || 0} minutes`,
+                        time: new Date().toISOString(),
+                        read: false,
+                        important: true
+                    };
+                    
+                    if (window.studyTracker && window.studyTracker.monitor) {
+                        window.studyTracker.monitor.saveMonitorNotification(notification);
+                        window.studyTracker.monitor.loadNotifications();
+                        window.studyTracker.monitor.updateBadge();
                     }
                 }
             }
             
-            updateMonitorUI(studentData) {
-                // Update study time
-                const studyTimeElement = document.getElementById('studyTime');
-                if (studyTimeElement && studentData.totalMinutes !== undefined) {
-                    const totalMinutes = studentData.totalMinutes;
-                    studyTimeElement.textContent = totalMinutes >= 60 ? 
-                        `${Math.floor(totalMinutes/60)}h ${totalMinutes%60}m` : 
-                        `${totalMinutes}m`;
+            showMonitorJoinedNotification(roomData) {
+                // Show live view indicator
+                const liveView = document.getElementById('monitorLiveView');
+                if (liveView) {
+                    liveView.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        liveView.classList.add('hidden');
+                    }, 10000);
                 }
                 
-                // Update sessions count
-                const sessionsCountElement = document.getElementById('sessionsCount');
-                if (sessionsCountElement && studentData.sessionsCount !== undefined) {
-                    sessionsCountElement.textContent = studentData.sessionsCount;
+                if (window.studyTracker) {
+                    window.studyTracker.showToast('Monitor is now watching live via Firebase!', 'success');
                 }
+            }
+            
+            updateMonitorTimer(timerData) {
+                if (!this.isMonitor || !timerData) return;
                 
-                // Update goal progress
-                const goalProgressElement = document.getElementById('goalProgress');
-                const progressBarElement = document.getElementById('progressBar');
-                if (goalProgressElement && studentData.goalProgress !== undefined) {
-                    const progress = Math.round(studentData.goalProgress);
-                    goalProgressElement.textContent = `${progress}%`;
-                    if (progressBarElement) {
-                        progressBarElement.style.width = `${progress}%`;
-                    }
-                }
-                
-                // Update streak
-                const streakElement = document.getElementById('streak');
-                if (streakElement && studentData.streak !== undefined) {
-                    streakElement.textContent = studentData.streak;
-                }
-                
-                // Update goal minutes
-                const goalMinutesElement = document.getElementById('goalMinutes');
-                if (goalMinutesElement && studentData.goal !== undefined) {
-                    goalMinutesElement.textContent = studentData.goal;
-                }
-                
-                // Update sessions table
-                if (studentData.sessions && Array.isArray(studentData.sessions)) {
-                    this.updateSessionsTable(studentData.sessions);
-                }
-                
-                // Update timer badge if timer is running
                 const timerBadge = document.getElementById('monitorTimerBadge');
                 const timerText = document.getElementById('monitorTimerText');
                 
-                if (timerBadge && timerText) {
-                    if (studentData.isTimerRunning && studentData.timerElapsed > 0) {
-                        const hours = Math.floor(studentData.timerElapsed / 3600);
-                        const minutes = Math.floor((studentData.timerElapsed % 3600) / 60);
-                        const seconds = studentData.timerElapsed % 60;
-                        
-                        timerText.textContent = 
-                            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                if (timerData.isRunning) {
+                    if (timerBadge) {
                         timerBadge.style.display = 'flex';
                         
-                        // Update timer badge every second if we're monitoring
-                        if (this.isMonitor) {
-                            clearTimeout(this.timerUpdateTimeout);
-                            this.timerUpdateTimeout = setTimeout(() => {
-                                if (studentData.isTimerRunning) {
-                                    this.updateMonitorUI({
-                                        ...studentData,
-                                        timerElapsed: studentData.timerElapsed + 1
-                                    });
-                                }
-                            }, 1000);
+                        if (timerText && timerData.elapsed !== undefined) {
+                            const hours = Math.floor(timerData.elapsed / 3600);
+                            const minutes = Math.floor((timerData.elapsed % 3600) / 60);
+                            const seconds = timerData.elapsed % 60;
+                            
+                            timerText.textContent = 
+                                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                         }
-                    } else {
+                    }
+                } else {
+                    if (timerBadge) {
                         timerBadge.style.display = 'none';
                     }
                 }
-                
-                // Update last sync time
-                this.lastSyncTime = Date.now();
-                this.updateConnectionStatus(true);
             }
             
-            updateSessionsTable(sessions) {
-                const sessionsTable = document.getElementById('sessionsTable');
-                if (!sessionsTable) return;
+            disconnect() {
+                if (this.roomRef) {
+                    this.roomRef.off();
+                }
+                if (this.dataRef) {
+                    this.dataRef.off();
+                }
+                if (this.timerRef) {
+                    this.timerRef.off();
+                }
+            }
+        }
+
+        // ========== ENHANCED MONITOR SYSTEM WITH FIREBASE ==========
+        class FirebaseStudyMonitor {
+            constructor(db, firebaseService, isMonitorView = false) {
+                this.db = db;
+                this.firebaseService = firebaseService;
+                this.isMonitorView = isMonitorView;
+                this.NOTIFICATION_KEY = isMonitorView ? 'monitor_notifications' : 'student_notifications';
+                this.MONITOR_NOTIFICATION_KEY = 'monitor_shared_notifications';
+                this.birthdayChecked = false;
+            }
+
+            init() {
+                this.checkBirthday();
+                this.setupNotifications();
+                this.loadNotifications();
                 
-                if (sessions.length === 0) {
-                    sessionsTable.innerHTML = `
-                        <tr><td colspan="4" class="text-center text-muted" style="padding: 40px;">No sessions today</td></tr>
-                    `;
-                } else {
-                    sessionsTable.innerHTML = '';
-                    sessions.forEach(session => {
-                        const row = document.createElement('tr');
-                        const date = new Date(session.date);
-                        const duration = Math.round(session.duration);
-                        const isManual = session.manual ? ' (manual)' : '';
-                        const isCorrected = session.corrected ? ' (corrected)' : '';
-                        
-                        row.innerHTML = `
-                            <td>${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}${isManual}${isCorrected}</td>
-                            <td>${session.subject}</td>
-                            <td><span class="strong">${duration}m</span></td>
-                            <td><span class="text-muted">${session.notes || '-'}</span></td>
-                        `;
-                        sessionsTable.appendChild(row);
+                if (!this.isMonitorView) {
+                    this.checkMonitorPresence();
+                }
+            }
+            
+            checkMonitorPresence() {
+                const roomId = localStorage.getItem('study_room_id');
+                if (roomId && this.firebaseService.isConnected) {
+                    setTimeout(() => {
+                        const liveView = document.getElementById('monitorLiveView');
+                        if (liveView) {
+                            liveView.classList.remove('hidden');
+                            
+                            setTimeout(() => {
+                                liveView.classList.add('hidden');
+                            }, 5000);
+                        }
+                    }, 1000);
+                }
+            }
+
+            setupNotifications() {
+                if ('Notification' in window && !this.isMonitorView) {
+                    Notification.requestPermission();
+                }
+
+                if (!this.isMonitorView) {
+                    this.scheduleMidnightCheck();
+                }
+            }
+
+            scheduleMidnightCheck() {
+                const now = new Date();
+                const midnight = new Date(now);
+                midnight.setHours(24, 0, 0, 0);
+                
+                const timeUntilMidnight = midnight - now;
+                
+                setTimeout(() => {
+                    this.sendDailyNotification();
+                    this.scheduleMidnightCheck();
+                }, timeUntilMidnight);
+            }
+
+            sendStudySessionNotification(session) {
+                if (this.isMonitorView) return;
+                
+                // Send to Firebase
+                this.firebaseService.sendStudyUpdate({
+                    type: 'session_completed',
+                    session: session,
+                    subject: session.subject,
+                    duration: session.duration,
+                    notes: session.notes,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Save notification
+                const monitorNotification = {
+                    id: 'firebase_study_' + Date.now(),
+                    type: 'study',
+                    title: '📚 Study Session Completed',
+                    message: `Shariq just studied ${session.duration} minutes of ${session.subject}`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true
+                };
+
+                this.saveMonitorNotification(monitorNotification);
+                this.updateBadge();
+            }
+            
+            sendTimerStartNotification(timerData) {
+                if (this.isMonitorView) return;
+                
+                this.firebaseService.sendTimerUpdate({
+                    type: 'timer_started',
+                    isRunning: true,
+                    subject: timerData.subject,
+                    startTime: new Date().toISOString(),
+                    elapsed: 0
+                });
+            }
+            
+            sendTimerStopNotification(timerData) {
+                if (this.isMonitorView) return;
+                
+                this.firebaseService.sendTimerUpdate({
+                    type: 'timer_stopped',
+                    isRunning: false,
+                    subject: timerData.subject,
+                    duration: timerData.duration,
+                    endTime: new Date().toISOString()
+                });
+            }
+            
+            sendTimerUpdateNotification(elapsedSeconds) {
+                if (this.isMonitorView) return;
+                
+                // Send timer updates every 5 seconds
+                if (elapsedSeconds % 5 === 0) {
+                    this.firebaseService.sendTimerUpdate({
+                        type: 'timer_update',
+                        isRunning: true,
+                        elapsed: elapsedSeconds,
+                        timestamp: Date.now()
                     });
                 }
             }
-            
-            updateConnectionStatus(connected = false) {
-                const statusElement = document.getElementById('peerStatus');
-                const statusText = document.getElementById('peerStatusText');
-                const connStatusElement = document.getElementById('peerConnStatus');
-                const syncStatusElement = document.getElementById('syncStatus');
-                
-                if (connected) {
-                    if (statusElement) {
-                        statusElement.className = 'peer-status';
-                        statusElement.style.display = 'flex';
-                        if (statusText) {
-                            statusText.textContent = this.isMonitor ? 
-                                `Connected to student` : 
-                                `Broadcasting to monitor`;
-                        }
-                    }
-                    
-                    if (connStatusElement) {
-                        connStatusElement.textContent = 'Connected';
-                        connStatusElement.style.color = 'var(--accent-green)';
-                    }
-                    
-                    if (syncStatusElement) {
-                        syncStatusElement.textContent = 'Synced';
-                        syncStatusElement.style.color = 'var(--accent-green)';
-                    }
-                    
-                    // Hide status after 3 seconds
-                    setTimeout(() => {
-                        if (statusElement && statusElement.style.display !== 'none') {
-                            statusElement.style.display = 'none';
-                        }
-                    }, 3000);
-                } else {
-                    if (statusElement) {
-                        statusElement.className = 'peer-status disconnected';
-                        statusElement.style.display = 'flex';
-                        if (statusText) {
-                            statusText.textContent = this.isMonitor ? 
-                                `Waiting for student connection...` : 
-                                `Waiting for monitor...`;
-                        }
-                    }
-                    
-                    if (connStatusElement) {
-                        connStatusElement.textContent = 'Disconnected';
-                        connStatusElement.style.color = 'var(--accent-red)';
-                    }
-                    
-                    if (syncStatusElement) {
-                        syncStatusElement.textContent = 'Not connected';
-                        syncStatusElement.style.color = 'var(--accent-red)';
-                    }
+
+            sendDailyNotification() {
+                const today = new Date().toDateString();
+                if (localStorage.getItem('lastDailyNotificationSent') === today) {
+                    return;
                 }
-            }
-            
-            sendNotificationToMonitor(notification) {
-                // Store notification for monitor to read
-                const notifications = JSON.parse(localStorage.getItem('monitor_notifications') || '[]');
-                notifications.unshift(notification);
-                localStorage.setItem('monitor_notifications', JSON.stringify(notifications));
                 
-                // Also broadcast via our sync system
-                const syncData = {
-                    type: 'notification',
-                    roomId: this.roomId,
-                    data: notification,
-                    timestamp: Date.now()
+                const data = this.db.load();
+                const todaySessions = this.db.getTodaySessions();
+                const totalMinutes = todaySessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+                const goal = data.settings.dailyGoal;
+                const goalMet = totalMinutes >= goal;
+                
+                // Save monitor notification
+                const monitorNotification = {
+                    id: 'firebase_daily_' + Date.now(),
+                    type: 'daily',
+                    title: goalMet ? '🎯 Student Goal Met!' : '⚠️ Student Goal Not Met',
+                    message: goalMet 
+                        ? `Shariq completed study goal today! (${totalMinutes}/${goal} min)`
+                        : `Shariq didn't meet study goal today. (${totalMinutes}/${goal} min)`,
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: !goalMet
                 };
+
+                this.saveMonitorNotification(monitorNotification);
                 
-                localStorage.setItem(this.storageKey, JSON.stringify(syncData));
+                localStorage.setItem('lastDailyNotificationSent', today);
                 
-                if (this.broadcastChannel) {
-                    this.broadcastChannel.postMessage(syncData);
+                this.updateBadge();
+            }
+
+            // ========== BIRTHDAY FEATURE ==========
+            checkBirthday() {
+                if (this.birthdayChecked || this.isMonitorView) return;
+                
+                const today = new Date();
+                const birthday = new Date(today.getFullYear(), 6, 17);
+                
+                if (today.getMonth() === birthday.getMonth() && 
+                    today.getDate() === birthday.getDate()) {
+                    
+                    this.showBirthdayMessage();
+                    this.sendBirthdayNotification();
+                    this.birthdayChecked = true;
                 }
             }
+
+            showBirthdayMessage() {
+                document.getElementById('birthdayOverlay').style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+
+            sendBirthdayNotification() {
+                // Send to Firebase
+                this.firebaseService.sendStudyUpdate({
+                    type: 'birthday',
+                    message: '🎂 Happy Birthday to the best monitor!',
+                    timestamp: Date.now()
+                });
+                
+                const monitorNotification = {
+                    id: 'firebase_birthday_' + Date.now(),
+                    type: 'special',
+                    title: '🎂 Happy Birthday to YOU!',
+                    message: 'Your student Shariq has a special birthday message for you!',
+                    time: new Date().toISOString(),
+                    read: false,
+                    important: true,
+                    special: true
+                };
+
+                this.saveMonitorNotification(monitorNotification);
+                this.updateBadge();
+            }
+
+            // ========== NOTIFICATION STORAGE ==========
+            saveNotification(notification) {
+                const notifications = this.getNotifications();
+                notifications.unshift(notification);
+                localStorage.setItem(this.NOTIFICATION_KEY, JSON.stringify(notifications));
+            }
+
+            saveMonitorNotification(notification) {
+                const notifications = this.getMonitorNotifications();
+                notifications.unshift(notification);
+                localStorage.setItem(this.MONITOR_NOTIFICATION_KEY, JSON.stringify(notifications));
+            }
+
+            getNotifications() {
+                return JSON.parse(localStorage.getItem(this.NOTIFICATION_KEY) || '[]');
+            }
+
+            getMonitorNotifications() {
+                return JSON.parse(localStorage.getItem(this.MONITOR_NOTIFICATION_KEY) || '[]');
+            }
+
+            markAsRead(id) {
+                const key = this.isMonitorView ? this.MONITOR_NOTIFICATION_KEY : this.NOTIFICATION_KEY;
+                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
+                const notification = notifications.find(n => n.id === id);
+                if (notification) {
+                    notification.read = true;
+                    localStorage.setItem(key, JSON.stringify(notifications));
+                    this.updateBadge();
+                }
+            }
+
+            markAllAsRead() {
+                const key = this.isMonitorView ? this.MONITOR_NOTIFICATION_KEY : this.NOTIFICATION_KEY;
+                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
+                notifications.forEach(n => n.read = true);
+                localStorage.setItem(key, JSON.stringify(notifications));
+                this.updateBadge();
+            }
+
+            clearNotifications() {
+                const key = this.isMonitorView ? this.MONITOR_NOTIFICATION_KEY : this.NOTIFICATION_KEY;
+                localStorage.removeItem(key);
+                this.updateBadge();
+            }
+
+            getUnreadCount() {
+                const key = this.isMonitorView ? this.MONITOR_NOTIFICATION_KEY : this.NOTIFICATION_KEY;
+                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
+                return notifications.filter(n => !n.read).length;
+            }
+
+            // ========== BADGE SYSTEM ==========
+            updateBadge() {
+                const unreadCount = this.getUnreadCount();
+                const badgeId = this.isMonitorView ? 'monitorNotificationBadge' : 'notificationBadge';
+                const badgeElement = document.getElementById(badgeId);
+                
+                if (badgeElement) {
+                    if (unreadCount > 0) {
+                        badgeElement.textContent = unreadCount > 9 ? '9+' : unreadCount;
+                        badgeElement.style.display = 'flex';
+                    } else {
+                        badgeElement.style.display = 'none';
+                    }
+                }
+                
+                if (!this.isMonitorView) {
+                    document.title = unreadCount > 0 
+                        ? `(${unreadCount}) Study Tracker` 
+                        : 'Study Tracker';
+                }
+            }
+
+            // ========== LOAD NOTIFICATIONS UI ==========
+            loadNotifications() {
+                const notifications = this.isMonitorView ? this.getMonitorNotifications() : this.getNotifications();
+                const notificationList = document.getElementById('notificationList');
+                
+                if (notificationList) {
+                    if (notifications.length === 0) {
+                        notificationList.innerHTML = `
+                            <div class="empty-notifications">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>No notifications yet</p>
+                            </div>
+                        `;
+                    } else {
+                        notificationList.innerHTML = notifications.map(notification => `
+                            <div class="notification-item ${notification.read ? '' : 'unread'} ${notification.important ? 'important' : ''} ${notification.special ? 'special' : ''}" 
+                                 data-id="${notification.id}" onclick="studyTracker.monitor.markAsRead('${notification.id}'); studyTracker.monitor.loadNotifications()">
+                                <div class="notification-icon">
+                                    <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
+                                </div>
+                                <div class="notification-content">
+                                    <div class="notification-title">${notification.title}</div>
+                                    <div class="notification-message">${notification.message}</div>
+                                    <div class="notification-time">${this.formatTime(notification.time)}</div>
+                                </div>
+                                ${!notification.read ? '<div class="notification-dot"></div>' : ''}
+                            </div>
+                        `).join('');
+                    }
+                }
+                
+                this.updateBadge();
+            }
+
+            getNotificationIcon(type) {
+                const icons = {
+                    'daily': 'calendar-day',
+                    'weekly': 'chart-line',
+                    'monthly': 'chart-bar',
+                    'study': 'book',
+                    'special': 'birthday-cake',
+                    'default': 'bell'
+                };
+                return icons[type] || icons.default;
+            }
+
+            formatTime(dateString) {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins} min ago`;
+                if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                return date.toLocaleDateString();
+            }
+
+            // ========== REPORT SYSTEM ==========
+            generateReport(period = 'daily') {
+                const data = this.db.load();
+                const now = new Date();
+                
+                let sessions = [];
+                let title = '';
+                
+                switch(period) {
+                    case 'daily':
+                        title = 'Daily Study Report';
+                        sessions = this.db.getTodaySessions();
+                        break;
+                    case 'weekly':
+                        title = 'Weekly Study Report';
+                        sessions = this.db.getWeeklySessions();
+                        break;
+                    case 'monthly':
+                        title = 'Monthly Study Report';
+                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                        sessions = data.sessions.filter(s => new Date(s.date) >= monthStart);
+                        break;
+                    case 'yearly':
+                        title = 'Yearly Study Report';
+                        const yearStart = new Date(now.getFullYear(), 0, 1);
+                        sessions = data.sessions.filter(s => new Date(s.date) >= yearStart);
+                        break;
+                }
+                
+                const totalMinutes = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+                const sessionCount = sessions.length;
+                const avgSession = sessionCount > 0 ? totalMinutes / sessionCount : 0;
+                
+                return {
+                    period,
+                    title,
+                    date: now.toISOString(),
+                    totalMinutes,
+                    sessionCount,
+                    avgSession: Math.round(avgSession),
+                    goal: data.settings.dailyGoal,
+                    sessions: sessions.slice(0, 50)
+                };
+            }
+
+            showReport(period = 'daily') {
+                const report = this.generateReport(period);
+                const modal = document.getElementById('reportModal');
+                
+                document.getElementById('reportTitle').textContent = report.title;
+                document.getElementById('reportDate').textContent = 
+                    `Generated: ${new Date(report.date).toLocaleString()}`;
+                
+                const content = document.getElementById('reportContent');
+                content.innerHTML = this.formatReportHTML(report);
+                
+                modal.style.display = 'flex';
+            }
+
+            formatReportHTML(report) {
+                let html = `
+                    <div class="report-summary">
+                        <div class="report-stats-grid">
+                            <div class="report-stat">
+                                <div class="report-stat-value">${report.totalMinutes}</div>
+                                <div class="report-stat-label">Total Minutes</div>
+                            </div>
+                            <div class="report-stat">
+                                <div class="report-stat-value">${report.sessionCount}</div>
+                                <div class="report-stat-label">Sessions</div>
+                            </div>
+                            <div class="report-stat">
+                                <div class="report-stat-value">${report.avgSession}</div>
+                                <div class="report-stat-label">Avg per Session</div>
+                            </div>
+                `;
+                
+                if (report.period === 'daily') {
+                    const goalMet = report.totalMinutes >= report.goal;
+                    html += `
+                            <div class="report-stat">
+                                <div class="report-stat-value ${goalMet ? 'success' : 'warning'}">
+                                    ${goalMet ? '✓' : '✗'}
+                                </div>
+                                <div class="report-stat-label">Goal: ${report.goal} min</div>
+                            </div>
+                    `;
+                } else {
+                    html += `
+                            <div class="report-stat">
+                                <div class="report-stat-value">${Math.round(report.totalMinutes / 60)}</div>
+                                <div class="report-stat-label">Hours</div>
+                            </div>
+                    `;
+                }
+                
+                html += `</div>`;
+                
+                if (report.sessions.length > 0) {
+                    html += `
+                        <div class="report-sessions">
+                            <h4><i class="fas fa-list"></i> Sessions</h4>
+                            <div style="overflow-x: auto;">
+                                <table class="sessions-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Subject</th>
+                                            <th>Duration</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${report.sessions.map(session => `
+                                            <tr>
+                                                <td>${new Date(session.date).toLocaleDateString()}</td>
+                                                <td>${session.subject}</td>
+                                                <td>${session.duration} min</td>
+                                                <td>${session.notes || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;"></i>
+                            <p>No sessions found for this period</p>
+                        </div>
+                    `;
+                }
+                
+                return html;
+            }
+
+            exportReport() {
+                const reportTitle = document.getElementById('reportTitle').textContent;
+                const reportContent = document.getElementById('reportContent').innerText;
+                
+                const blob = new Blob([`${reportTitle}\n\n${reportContent}`], {type: 'text/plain'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${reportTitle.toLowerCase().replace(/ /g, '-')}-${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+                
+                URL.revokeObjectURL(url);
+                this.showToast('Report exported!', 'success');
+            }
+
+            // ========== SHOW TOAST ==========
+            showToast(message, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                    ${message}
+                `;
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            }
             
-            cleanup() {
-                if (this.broadcastInterval) {
-                    clearInterval(this.broadcastInterval);
-                }
-                if (this.broadcastChannel) {
-                    this.broadcastChannel.close();
-                }
+            // ========== EMAIL FEATURE ==========
+            sendMonitorEmail() {
+                const name = document.getElementById('monitorName').value.trim() || 'Study Monitor';
+                const link = document.getElementById('monitorLink').textContent;
+                const roomId = document.getElementById('roomId').textContent;
+                
+                const subject = encodeURIComponent(`📚 Firebase Study Tracker Monitor Access - ${name}`);
+                const body = encodeURIComponent(`Hello ${name},
+
+You've been invited to monitor Shariq's study progress in REAL-TIME via Firebase!
+
+📱 **FIREBASE MONITOR ACCESS:**
+${link}
+
+🔑 **Room ID (alternative access):**
+${roomId}
+
+🚀 **REAL-TIME FEATURES (via Firebase):**
+• Live timer updates (see timer counting in real-time)
+• Instant session notifications
+• Live progress tracking
+• Cloud synced data
+• No server setup needed
+
+📝 **Instructions:**
+1. Open the link on any device
+2. Bookmark it or add to home screen
+3. You'll see everything LIVE as it happens
+4. Data is synced via Firebase (no login required)
+
+Best regards,
+Shariq's Firebase Study Tracker
+
+---
+*This link gives you live monitor access via Firebase Realtime Database.*`);
+                
+                const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+                window.open(mailtoLink, '_blank');
+                
+                this.showToast('Email opened with Firebase link! Just hit send.', 'success');
             }
         }
 
@@ -1654,288 +2567,19 @@
             }
         }
 
-        // ========== MONITOR SYSTEM ==========
-        class StudyMonitor {
-            constructor(db, peerSync, isMonitorView = false) {
-                this.db = db;
-                this.peerSync = peerSync;
-                this.isMonitorView = isMonitorView;
-                this.NOTIFICATION_KEY = isMonitorView ? 'monitor_notifications' : 'student_notifications';
-                this.birthdayChecked = false;
-            }
-
-            init() {
-                this.checkBirthday();
-                this.loadNotifications();
-                
-                if (!this.isMonitorView) {
-                    this.setupNotifications();
-                }
-            }
-            
-            setupNotifications() {
-                if ('Notification' in window) {
-                    Notification.requestPermission();
-                }
-            }
-            
-            checkBirthday() {
-                if (this.birthdayChecked || this.isMonitorView) return;
-                
-                const today = new Date();
-                const birthday = new Date(today.getFullYear(), 6, 17); // July 17
-                
-                if (today.getMonth() === birthday.getMonth() && 
-                    today.getDate() === birthday.getDate()) {
-                    
-                    this.showBirthdayMessage();
-                    this.sendBirthdayNotification();
-                    this.birthdayChecked = true;
-                }
-            }
-
-            showBirthdayMessage() {
-                document.getElementById('birthdayOverlay').style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-            }
-
-            sendBirthdayNotification() {
-                const monitorNotification = {
-                    id: 'mon_birthday_' + Date.now(),
-                    type: 'special',
-                    title: '🎂 Happy Birthday to YOU!',
-                    message: 'Your student Shariq has a special birthday message for you!',
-                    time: new Date().toISOString(),
-                    read: false,
-                    important: true,
-                    special: true
-                };
-
-                this.saveMonitorNotification(monitorNotification);
-                this.updateBadge();
-            }
-            
-            sendStudySessionNotification(session) {
-                if (this.isMonitorView) return;
-                
-                const monitorNotification = {
-                    id: 'mon_study_' + Date.now(),
-                    type: 'study',
-                    title: '📚 Study Session Completed',
-                    message: `Shariq just studied ${session.duration} minutes of ${session.subject}`,
-                    time: new Date().toISOString(),
-                    read: false,
-                    important: true
-                };
-
-                this.saveMonitorNotification(monitorNotification);
-                
-                // Send via peer sync
-                if (this.peerSync) {
-                    this.peerSync.sendNotificationToMonitor(monitorNotification);
-                }
-                
-                this.updateBadge();
-            }
-            
-            saveNotification(notification) {
-                const notifications = this.getNotifications();
-                notifications.unshift(notification);
-                localStorage.setItem(this.NOTIFICATION_KEY, JSON.stringify(notifications));
-            }
-
-            saveMonitorNotification(notification) {
-                const notifications = this.getMonitorNotifications();
-                notifications.unshift(notification);
-                localStorage.setItem('monitor_notifications', JSON.stringify(notifications));
-            }
-
-            getNotifications() {
-                return JSON.parse(localStorage.getItem(this.NOTIFICATION_KEY) || '[]');
-            }
-
-            getMonitorNotifications() {
-                return JSON.parse(localStorage.getItem('monitor_notifications') || '[]');
-            }
-
-            markAsRead(id) {
-                const key = this.isMonitorView ? 'monitor_notifications' : this.NOTIFICATION_KEY;
-                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
-                const notification = notifications.find(n => n.id === id);
-                if (notification) {
-                    notification.read = true;
-                    localStorage.setItem(key, JSON.stringify(notifications));
-                    this.updateBadge();
-                }
-            }
-
-            markAllAsRead() {
-                const key = this.isMonitorView ? 'monitor_notifications' : this.NOTIFICATION_KEY;
-                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
-                notifications.forEach(n => n.read = true);
-                localStorage.setItem(key, JSON.stringify(notifications));
-                this.updateBadge();
-            }
-
-            clearNotifications() {
-                const key = this.isMonitorView ? 'monitor_notifications' : this.NOTIFICATION_KEY;
-                localStorage.removeItem(key);
-                this.updateBadge();
-            }
-
-            getUnreadCount() {
-                const key = this.isMonitorView ? 'monitor_notifications' : this.NOTIFICATION_KEY;
-                const notifications = JSON.parse(localStorage.getItem(key) || '[]');
-                return notifications.filter(n => !n.read).length;
-            }
-
-            updateBadge() {
-                const unreadCount = this.getUnreadCount();
-                const badgeId = this.isMonitorView ? 'monitorNotificationBadge' : 'notificationBadge';
-                const badgeElement = document.getElementById(badgeId);
-                
-                if (badgeElement) {
-                    if (unreadCount > 0) {
-                        badgeElement.textContent = unreadCount > 9 ? '9+' : unreadCount;
-                        badgeElement.style.display = 'flex';
-                    } else {
-                        badgeElement.style.display = 'none';
-                    }
-                }
-                
-                if (!this.isMonitorView) {
-                    document.title = unreadCount > 0 
-                        ? `(${unreadCount}) Study Tracker` 
-                        : 'Study Tracker';
-                }
-            }
-
-            loadNotifications() {
-                const notifications = this.isMonitorView ? this.getMonitorNotifications() : this.getNotifications();
-                const notificationList = document.getElementById('notificationList');
-                
-                if (notificationList) {
-                    if (notifications.length === 0) {
-                        notificationList.innerHTML = `
-                            <div class="empty-notifications">
-                                <i class="fas fa-bell-slash"></i>
-                                <p>No notifications yet</p>
-                            </div>
-                        `;
-                    } else {
-                        notificationList.innerHTML = notifications.map(notification => `
-                            <div class="notification-item ${notification.read ? '' : 'unread'} ${notification.important ? 'important' : ''} ${notification.special ? 'special' : ''}" 
-                                 data-id="${notification.id}" onclick="studyTracker.monitor.markAsRead('${notification.id}'); studyTracker.monitor.loadNotifications()">
-                                <div class="notification-icon">
-                                    <i class="fas fa-${this.getNotificationIcon(notification.type)}"></i>
-                                </div>
-                                <div class="notification-content">
-                                    <div class="notification-title">${notification.title}</div>
-                                    <div class="notification-message">${notification.message}</div>
-                                    <div class="notification-time">${this.formatTime(notification.time)}</div>
-                                </div>
-                                ${!notification.read ? '<div class="notification-dot"></div>' : ''}
-                            </div>
-                        `).join('');
-                    }
-                }
-                
-                this.updateBadge();
-            }
-
-            getNotificationIcon(type) {
-                const icons = {
-                    'daily': 'calendar-day',
-                    'weekly': 'chart-line',
-                    'monthly': 'chart-bar',
-                    'study': 'book',
-                    'special': 'birthday-cake',
-                    'default': 'bell'
-                };
-                return icons[type] || icons.default;
-            }
-
-            formatTime(dateString) {
-                const date = new Date(dateString);
-                const now = new Date();
-                const diffMs = now - date;
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMs / 3600000);
-                const diffDays = Math.floor(diffMs / 86400000);
-                
-                if (diffMins < 1) return 'Just now';
-                if (diffMins < 60) return `${diffMins} min ago`;
-                if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-                if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-                return date.toLocaleDateString();
-            }
-
-            showToast(message, type = 'info') {
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                toast.innerHTML = `
-                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-                    ${message}
-                `;
-                
-                document.body.appendChild(toast);
-                
-                setTimeout(() => {
-                    toast.remove();
-                }, 3000);
-            }
-            
-            sendMonitorEmail() {
-                const name = document.getElementById('monitorName').value.trim() || 'Study Monitor';
-                const link = document.getElementById('monitorLink').textContent;
-                const roomId = document.getElementById('roomId').textContent;
-                
-                const subject = encodeURIComponent(`📚 Study Tracker Monitor Access - ${name}`);
-                const body = encodeURIComponent(`Hello ${name},
-
-You've been invited to monitor Shariq's study progress!
-
-📱 **ACCESS LINK:**
-${link}
-
-🔑 **ROOM ID (if link doesn't work):**
-${roomId}
-
-📝 **HOW TO ACCESS:**
-1. Open the link on your phone/computer
-2. Or enter this Room ID manually: ${roomId}
-3. You'll see real-time study updates
-4. Bookmark the page for easy access
-
-Everything updates automatically - no need to refresh!
-
-Best regards,
-Shariq's Study Tracker`);
-                
-                const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
-                window.open(mailtoLink, '_blank');
-                
-                this.showToast('Email opened with link! Just hit send.', 'success');
-            }
-        }
-
-        // ========== MAIN APP ==========
-        class StudyTracker {
+        // ========== MAIN APP WITH FIREBASE ==========
+        class FirebaseStudyTracker {
             constructor() {
                 this.db = new StudyDatabase();
+                this.firebaseService = new FirebaseRealTimeService();
+                this.calendar = new StudyCalendar(this.db);
+                this.weeklyChart = new WeeklyChart(this.db);
                 
-                // Check if monitor view
                 const urlParams = new URLSearchParams(window.location.search);
                 this.isMonitorView = urlParams.has('monitor');
                 this.monitorRoomId = urlParams.get('room');
                 
-                // Initialize peer sync
-                this.peerSync = new PeerSync(this.isMonitorView);
-                
-                this.calendar = new StudyCalendar(this.db);
-                this.weeklyChart = new WeeklyChart(this.db);
-                this.monitor = new StudyMonitor(this.db, this.peerSync, this.isMonitorView);
-                
+                this.monitor = new FirebaseStudyMonitor(this.db, this.firebaseService, this.isMonitorView);
                 this.timerInterval = null;
                 this.startTime = null;
                 this.isRunning = false;
@@ -1956,8 +2600,24 @@ Shariq's Study Tracker`);
                     this.weeklyChart.render();
                     this.monitor.init();
                     
+                    // Connect to Firebase
+                    this.firebaseService.connect();
+                    
+                    // Check if monitor view or joining room
                     if (this.isMonitorView) {
                         this.showMonitorView();
+                        
+                        // Join monitor room if provided
+                        if (this.monitorRoomId) {
+                            this.firebaseService.joinRoom(this.monitorRoomId);
+                        }
+                    } else {
+                        // Check for existing room
+                        const savedRoomId = localStorage.getItem('study_room_id');
+                        if (savedRoomId && this.firebaseService.isConnected) {
+                            this.firebaseService.roomId = savedRoomId;
+                            this.firebaseService.setupRoomListener();
+                        }
                     }
                     
                     // Setup hide live view button
@@ -1971,8 +2631,11 @@ Shariq's Study Tracker`);
                         document.body.style.overflow = 'auto';
                     };
                     
-                    // Update connection info
-                    this.updateConnectionInfo();
+                    // Setup auto-hide for real-time status
+                    setTimeout(() => {
+                        const status = document.getElementById('realtimeStatus');
+                        if (status) status.style.display = 'none';
+                    }, 5000);
                 }, 800);
             }
             
@@ -1983,13 +2646,14 @@ Shariq's Study Tracker`);
                     <i class="fas fa-eye" style="color: var(--accent-blue);"></i>
                     <div>
                         <strong>You are monitoring Shariq</strong><br>
-                        <span class="small text-muted">Real-time tracking active</span>
+                        <span class="small text-muted">Firebase Real-time tracking active</span>
                     </div>
                 `;
                 document.getElementById('monitorStatus').classList.remove('inactive');
+                document.getElementById('monitorStatus').classList.add('active');
                 
                 document.querySelector('.header h1').innerHTML = '<i class="fas fa-eye"></i> Live Monitor View';
-                document.querySelector('.header p').textContent = 'Real-time tracking of Shariq\'s Study Progress';
+                document.querySelector('.header p').textContent = 'Firebase Real-time tracking of Shariq\'s Study Progress';
                 
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = true;
@@ -2002,17 +2666,19 @@ Shariq's Study Tracker`);
                 document.getElementById('notificationBtn').style.display = 'none';
                 document.getElementById('monitorNotificationBtn').style.display = 'flex';
                 
-                this.showToast('Live monitor view active - Real-time updates enabled', 'success');
+                this.showToast('Firebase monitor view active - Real-time updates enabled', 'success');
             }
             
-            updateConnectionInfo() {
-                const connectionInfo = document.getElementById('connectionInfo');
-                if (connectionInfo) {
-                    if (this.isMonitorView) {
-                        connectionInfo.textContent = 'Connected to student via peer sync';
-                    } else {
-                        connectionInfo.textContent = 'Broadcasting to monitor via peer sync';
-                    }
+            updateFromRemote(data) {
+                if (!this.isMonitorView) return;
+                
+                // Update UI based on Firebase data
+                this.loadData();
+                this.calendar.render();
+                this.weeklyChart.render();
+                
+                if (data.type === 'session_completed') {
+                    this.showToast(`📚 Shariq studied ${data.duration} min of ${data.subject}`, 'success');
                 }
             }
             
@@ -2022,7 +2688,7 @@ Shariq's Study Tracker`);
                 document.getElementById('stopBtn').onclick = () => this.stopTimer();
                 document.getElementById('editBtn').onclick = () => this.showEditModal();
                 
-                // Edit modal
+                // Edit modal options
                 document.getElementById('editTimerBtn').onclick = () => {
                     document.getElementById('editTimerBtn').classList.add('active');
                     document.getElementById('addManualBtn').classList.remove('active');
@@ -2079,6 +2745,13 @@ Shariq's Study Tracker`);
                     }
                 };
                 
+                // Reports
+                document.getElementById('dailyReportBtn').onclick = () => this.monitor.showReport('daily');
+                document.getElementById('weeklyReportBtn').onclick = () => this.monitor.showReport('weekly');
+                document.getElementById('monthlyReportBtn').onclick = () => this.monitor.showReport('monthly');
+                document.getElementById('yearlyReportBtn').onclick = () => this.monitor.showReport('yearly');
+                document.getElementById('exportReportBtn').onclick = () => this.monitor.exportReport();
+                
                 // Modal close
                 document.querySelectorAll('.close-modal').forEach(btn => {
                     btn.onclick = () => {
@@ -2114,17 +2787,22 @@ Shariq's Study Tracker`);
                 document.getElementById('stopBtn').disabled = false;
                 document.getElementById('startBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Studying...';
                 
+                // Start timer display
                 this.timerInterval = setInterval(() => {
                     this.elapsedSeconds = Math.floor((new Date() - this.startTime) / 1000);
                     this.updateTimer();
+                    
+                    // Send Firebase timer update
+                    this.monitor.sendTimerUpdateNotification(this.elapsedSeconds);
                 }, 1000);
                 
-                // Show live view indicator
-                if (!this.isMonitorView) {
-                    document.getElementById('monitorLiveView').classList.remove('hidden');
-                }
+                // Send timer start notification
+                this.monitor.sendTimerStartNotification({
+                    subject: subject,
+                    startTime: this.startTime
+                });
                 
-                this.showToast('Started studying ' + subject + ' (Live updates to monitor)', 'success');
+                this.showToast('Started studying ' + subject + ' (Firebase updates to monitor)', 'success');
             }
             
             stopTimer() {
@@ -2143,8 +2821,12 @@ Shariq's Study Tracker`);
                 
                 this.db.addSession(session);
                 
-                // Send notification to monitor
+                // Send Firebase notifications
                 this.monitor.sendStudySessionNotification(session);
+                this.monitor.sendTimerStopNotification({
+                    subject: this.currentSession.subject,
+                    duration: duration
+                });
                 
                 this.isRunning = false;
                 this.startTime = null;
@@ -2159,7 +2841,7 @@ Shariq's Study Tracker`);
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Studied ${duration} minutes (Sent to monitor)`, 'success');
+                this.showToast(`Studied ${duration} minutes (Sent to Firebase monitor)`, 'success');
             }
             
             updateTimer() {
@@ -2229,7 +2911,7 @@ Shariq's Study Tracker`);
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Saved corrected time: ${duration} minutes (Sent to monitor)`, 'success');
+                this.showToast(`Saved corrected time: ${duration} minutes (Sent to Firebase monitor)`, 'success');
             }
             
             saveManualSession() {
@@ -2260,7 +2942,7 @@ Shariq's Study Tracker`);
                 this.calendar.render();
                 this.weeklyChart.render();
                 
-                this.showToast(`Added ${duration} minute session (Sent to monitor)`, 'success');
+                this.showToast(`Added ${duration} minute session (Sent to Firebase monitor)`, 'success');
             }
             
             showMonitorModal() {
@@ -2270,8 +2952,11 @@ Shariq's Study Tracker`);
                 // Generate room ID
                 let roomId = localStorage.getItem('study_room_id');
                 if (!roomId) {
-                    roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-                    localStorage.setItem('study_room_id', roomId);
+                    roomId = this.firebaseService.createRoom('Study Monitor');
+                } else {
+                    document.getElementById('monitorLink').textContent = 
+                        window.location.href.split('?')[0] + '?monitor=true&room=' + roomId;
+                    document.getElementById('roomId').textContent = roomId;
                 }
                 
                 // Generate monitor link
@@ -2281,9 +2966,6 @@ Shariq's Study Tracker`);
                 document.getElementById('monitorLink').textContent = monitorLink;
                 document.getElementById('roomId').textContent = roomId;
                 
-                // Generate QR code
-                this.generateQRCode(monitorLink);
-                
                 // Set monitor name if exists
                 const monitorName = localStorage.getItem('monitor_name') || 'Study Monitor';
                 document.getElementById('monitorName').value = monitorName;
@@ -2291,26 +2973,10 @@ Shariq's Study Tracker`);
                 modal.style.display = 'flex';
             }
             
-            generateQRCode(text) {
-                const canvas = document.getElementById('qrCodeCanvas');
-                if (canvas && typeof QRCode !== 'undefined') {
-                    QRCode.toCanvas(canvas, text, {
-                        width: 200,
-                        margin: 2,
-                        color: {
-                            dark: '#000000',
-                            light: '#FFFFFF'
-                        }
-                    }, function(error) {
-                        if (error) console.error('QR Code error:', error);
-                    });
-                }
-            }
-            
             copyMonitorLink() {
                 const link = document.getElementById('monitorLink').textContent;
                 navigator.clipboard.writeText(link).then(() => {
-                    this.showToast('Monitor link copied!', 'success');
+                    this.showToast('Firebase monitor link copied!', 'success');
                 });
             }
             
@@ -2318,11 +2984,10 @@ Shariq's Study Tracker`);
                 const name = document.getElementById('monitorName').value.trim() || 'Study Monitor';
                 const code = this.db.setMonitor(name);
                 
-                // Update room
+                // Create/update room in Firebase
                 let roomId = localStorage.getItem('study_room_id');
                 if (!roomId) {
-                    roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-                    localStorage.setItem('study_room_id', roomId);
+                    roomId = this.firebaseService.createRoom(name);
                 }
                 
                 localStorage.setItem('monitor_name', name);
@@ -2331,12 +2996,9 @@ Shariq's Study Tracker`);
                 document.getElementById('monitorLink').textContent = monitorLink;
                 document.getElementById('roomId').textContent = roomId;
                 
-                // Update QR code
-                this.generateQRCode(monitorLink);
-                
                 document.getElementById('inviteMonitorModal').style.display = 'none';
                 this.loadData();
-                this.showToast(`Monitor "${name}" invited with real-time access!`, 'success');
+                this.showToast(`Monitor "${name}" invited with Firebase real-time access!`, 'success');
             }
             
             editGoal() {
@@ -2381,7 +3043,7 @@ Shariq's Study Tracker`);
                         <i class="fas fa-user-check" style="color: var(--accent-green);"></i>
                         <div>
                             <strong>Monitor: ${data.settings.monitor.name}</strong><br>
-                            <span class="small text-muted">Real-time connected</span>
+                            <span class="small text-muted">Firebase Real-time connected</span>
                         </div>
                     `;
                 } else {
@@ -2433,13 +3095,13 @@ Shariq's Study Tracker`);
         // Start app
         let studyTracker;
         window.addEventListener('DOMContentLoaded', () => {
-            studyTracker = new StudyTracker();
+            studyTracker = new FirebaseStudyTracker();
         });
         
-        // Cleanup
+        // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
-            if (studyTracker && studyTracker.peerSync) {
-                studyTracker.peerSync.cleanup();
+            if (studyTracker && studyTracker.firebaseService) {
+                studyTracker.firebaseService.disconnect();
             }
         });
     </script>
