@@ -3107,3 +3107,64 @@ Shariq's Firebase Study Tracker
     </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>My Firebase Website</title>
+
+    <!-- === Your existing CSS === -->
+    <style>
+        /* === Reset and base === */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        /* Add your other existing CSS here */
+    </style>
+
+    <!-- === Firebase SDKs === -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+</head>
+<body>
+
+<h1>Firebase is Ready!</h1>
+
+<!-- === Firebase Initialization === -->
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyB9b15bG0Cc-mp2B7zFtqBkQU7swYS32YY",
+        authDomain: "study-tracker-a207b.firebaseapp.com",
+        databaseURL: "https://study-tracker-a207b-default-rtdb.firebaseio.com",
+        projectId: "study-tracker-a207b",
+        storageBucket: "study-tracker-a207b.firebasestorage.app",
+        messagingSenderId: "1082920157508",
+        appId: "1:1082920157508:web:c38d54edf9d934b4939711"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+
+    // Initialize Firestore
+    const db = firebase.firestore();
+
+    // Example: Add test data to Firestore
+    db.collection("testCollection").add({
+        name: "Sharique",
+        timestamp: new Date()
+    })
+    .then(() => console.log("Data added to Firestore!"))
+    .catch((error) => console.error("Error adding data:", error));
+</script>
+
+</body>
+</html>
